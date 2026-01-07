@@ -32,8 +32,10 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ] ; then
             SHORT_SHA=$(echo ${{ github.event.pull_request.head.sha }} | cut -c1-8)
+            GIT_BRANCH=${{ github.head_ref }}
           else
             SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-8)
+            GIT_BRANCH=${{ github.ref_name }}
           fi
 
           if [ "${{ github.ref_name }}" = "main" ] ; then
@@ -41,7 +43,7 @@ jobs:
             echo "image_tag=dev-${SHORT_SHA}" | tee -a $GITHUB_OUTPUT
           else
             # This covers feature/ and bugfix/ branches
-            echo "Processing feature/bugfix branch ${{ github.head_ref }}"
+            echo "Processing feature/bugfix branch $GIT_BRANCH"
             echo "image_tag=feature-${SHORT_SHA}" | tee -a $GITHUB_OUTPUT
           fi
 
