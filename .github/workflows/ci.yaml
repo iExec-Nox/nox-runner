@@ -61,7 +61,7 @@ jobs:
       security-scan: true
       security-report: "comment"
       hadolint: true
-      platforms: linux/amd64
+      platform: linux/amd64
     secrets:
       username: ${{ secrets.NEXUS_USERNAME }}
       password: ${{ secrets.NEXUS_PASSWORD }}
