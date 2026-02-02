@@ -1,3 +1,33 @@
-fn main() {
-    println!("Hello, world!");
+mod application;
+mod config;
+mod crypto;
+mod utils;
+
+use tracing::{debug, error};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+use application::Application;
+use config::Config;
+use crypto::CryptoService;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    let config = Config::load().map_err(|e| {
+        error!("Failed to load configuration: {e}");
+        e
+    })?;
+
+    debug!("Configuration loaded");
+
+    let _svc = CryptoService::new(&config.kms_url).await?;
+    Application::new().run().await;
+    Ok(())
 }
