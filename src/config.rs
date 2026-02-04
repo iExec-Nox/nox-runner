@@ -14,7 +14,7 @@ impl Config {
         let config = ConfigBuilder::builder()
             .set_default("handle_gateway_url", "http://localhost:3000")?
             .set_default("kms_url", "http://localhost:9000")?
-            .set_default("nats_url", "nats:://localhost:4222")?
+            .set_default("nats_url", "nats://localhost:4222")?
             .add_source(
                 Environment::with_prefix("NOX_RUNNER")
                     .prefix_separator("_")
