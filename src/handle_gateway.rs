@@ -14,6 +14,7 @@ pub struct HandleEntry {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TEEComputeResult {
     pub chain_id: u32,
     pub block_number: u64,
@@ -21,6 +22,7 @@ pub struct TEEComputeResult {
     pub transaction_hash: String,
     pub handles: Vec<HandleEntry>,
 }
+
 pub struct GatewayClient {
     client: Client,
     url: String,
