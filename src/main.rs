@@ -1,6 +1,9 @@
 mod application;
 mod config;
 mod crypto;
+mod events;
+mod handle_gateway;
+mod queue;
 mod utils;
 
 use tracing::{debug, error};
@@ -28,6 +31,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     debug!("Configuration loaded");
 
     let _svc = CryptoService::new(&config.kms_url).await?;
-    Application::new().run().await;
+    Application::new(config).await?.run().await?;
     Ok(())
 }

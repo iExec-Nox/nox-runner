@@ -1,0 +1,44 @@
+use alloy_primitives::Address;
+use serde::Deserialize;
+
+/// Handle type for encrypted values (hex-encoded bytes32)
+pub type Handle = String;
+
+/// Encryption operation (plaintext to encrypted)
+#[derive(Deserialize)]
+pub struct EncryptionOperation {
+    pub value: String,
+    pub tee_type: u8,
+    pub handle: Handle,
+}
+
+/// Event payload with typed variants
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum Operator {
+    PlaintextToEncrypted(EncryptionOperation),
+}
+
+/// Individual event within a transaction
+#[derive(Deserialize)]
+pub struct TransactionEvent {
+    pub log_index: u64,
+    pub caller: Address,
+    #[serde(flatten)]
+    pub operator: Operator,
+}
+
+/// Message format grouping events by transaction
+#[derive(Deserialize)]
+pub struct TransactionMessage {
+    /// Chain ID where the events occurred
+    pub chain_id: u32,
+    /// Block number
+    pub block_number: u64,
+    /// Caller address
+    pub caller: Address,
+    /// Transaction hash
+    pub transaction_hash: String,
+    /// Events in this transaction, ordered by log_index
+    pub events: Vec<TransactionEvent>,
+}
