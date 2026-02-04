@@ -11,7 +11,6 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use application::Application;
 use config::Config;
-use crypto::CryptoService;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -30,7 +29,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     debug!("Configuration loaded");
 
-    let _svc = CryptoService::new(&config.kms_url).await?;
     Application::new(config).await?.run().await?;
     Ok(())
 }

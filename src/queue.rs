@@ -22,7 +22,7 @@ impl QueueService {
     }
 
     pub async fn handle_message(&self, message: Message) -> Result<(), String> {
-        debug!("Received message ${:?}", message);
+        debug!("Received message {:?}", message);
         let transaction_message = serde_json::from_slice::<TransactionMessage>(&message.payload)
             .map_err(|e| format!("Failed to deserialize message: {e}"))?;
         let mut result_entries = Vec::new();
@@ -34,7 +34,7 @@ impl QueueService {
             );
             let result_entry = match event.operator {
                 Operator::PlaintextToEncrypted(operation) => {
-                    self.do_plaintext_to_encryted(operation).await?
+                    self.do_plaintext_to_encrypted(operation).await?
                 }
             };
             result_entries.push(result_entry);
@@ -54,7 +54,7 @@ impl QueueService {
     }
 
     /// Encrypt plaintext, data cannot be bigger than 32 bytes
-    async fn do_plaintext_to_encryted(
+    async fn do_plaintext_to_encrypted(
         &self,
         operation: EncryptionOperation,
     ) -> Result<HandleEntry, String> {
