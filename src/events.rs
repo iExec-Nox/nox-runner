@@ -4,6 +4,13 @@ use serde::Deserialize;
 /// Handle type for encrypted values (hex-encoded bytes32)
 pub type Handle = String;
 
+#[derive(Deserialize)]
+pub struct BinaryOperation {
+    pub left_hand_operand: Handle,
+    pub right_hand_operand: Handle,
+    pub result: Handle,
+}
+
 /// Encryption operation (plaintext to encrypted)
 #[derive(Deserialize)]
 pub struct EncryptionOperation {
@@ -17,6 +24,9 @@ pub struct EncryptionOperation {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Operator {
     PlaintextToEncrypted(EncryptionOperation),
+    Add(BinaryOperation),
+    Sub(BinaryOperation),
+    Div(BinaryOperation),
 }
 
 /// Individual event within a transaction
