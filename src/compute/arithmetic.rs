@@ -102,7 +102,7 @@ pub fn compute(
         (Operator::Div, SolidityValue::Int256(a), SolidityValue::Int256(b)) => {
             Ok(SolidityValue::Int256(a / b))
         }
-        _ => Err("did not work".to_string()),
+        _ => Err("Unsupported operation".to_string()),
     }
 }
 

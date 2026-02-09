@@ -4,7 +4,10 @@ use chrono::NaiveDateTime;
 use serde::Deserialize;
 use tracing::{debug, error, info};
 
-use crate::compute::arithmetic::{Operator as ArithmeticOperator, SolidityValue, compute};
+use crate::compute::{
+    arithmetic::{Operator as ArithmeticOperator, SolidityValue, compute},
+    get_solidity_type_from_handle, get_solidity_type_size,
+};
 use crate::crypto::CryptoService;
 use crate::events::{BinaryOperation, EncryptionOperation, Operator, TransactionMessage};
 use crate::handle_gateway::{GatewayClient, HandleEntry, TEEComputeResult};
@@ -115,15 +118,7 @@ impl QueueService {
             ));
         }
         let result = compute(operator, operands[0].clone(), operands[1].clone())?.to_bytes();
-        let encrypted_result = self.crypto_svc.ecies_encrypt(&result[30..32])?;
-        let handle_entry = HandleEntry {
-            handle: operation.result,
-            ciphertext: hex::encode(encrypted_result.ciphertext),
-            public_key: hex::encode(encrypted_result.ephemeral_pubkey),
-            nonce: hex::encode(encrypted_result.nonce),
-            created_at: NaiveDateTime::default(),
-        };
-        Ok(handle_entry)
+        self.format_and_encrypt_result(operation.result, result)
     }
 
     /// Decrypts and converts an operand to its alloy-primitives type.
@@ -134,10 +129,30 @@ impl QueueService {
             &entry.iv,
         )?;
         let mut result = [0u8; 32];
-        result[32 - data_bytes.len()..32].copy_from_slice(&data_bytes);
-        let solidity_type = hex::decode(entry.handle)
-            .map_err(|e| format!("Failed to decode handle hex value {e}"))?[30];
+        result[(32 - data_bytes.len())..32].copy_from_slice(&data_bytes);
+        let solidity_type = get_solidity_type_from_handle(&entry.handle)?;
         SolidityValue::from_bytes(solidity_type, result)
+    }
+
+    /// Formats and encrypts result from a 32-byte value to a valid solidity type size
+    fn format_and_encrypt_result(
+        &self,
+        handle: String,
+        result: [u8; 32],
+    ) -> Result<HandleEntry, String> {
+        let solidity_type = get_solidity_type_from_handle(&handle)?;
+        let solidity_type_size = get_solidity_type_size(solidity_type)?;
+        let encrypted_result = self
+            .crypto_svc
+            .ecies_encrypt(&result[(32 - solidity_type_size)..32])?;
+        let handle_entry = HandleEntry {
+            handle,
+            ciphertext: hex::encode(encrypted_result.ciphertext),
+            public_key: hex::encode(encrypted_result.ephemeral_pubkey),
+            nonce: hex::encode(encrypted_result.nonce),
+            created_at: NaiveDateTime::default(),
+        };
+        Ok(handle_entry)
     }
 
     /// Encrypt plaintext for storage in handle storage.
@@ -147,26 +162,14 @@ impl QueueService {
         &self,
         operation: EncryptionOperation,
     ) -> Result<HandleEntry, String> {
-        let tee_type_size = match operation.tee_type {
-            0_u8 => 1_u8,
-            1_u8 => 20_u8,
-            2_u8..4_u8 => 32,
-            v @ 4_u8..36_u8 => v - 3_u8,
-            v @ 36..68_u8 => v - 35_u8,
-            v @ 68_u8..100_u8 => v - 67_u8,
-            v => {
-                let message = format!("Unsupported TEE type for encryption ({v})");
-                error!(message);
-                return Err(message);
-            }
-        };
+        let solidity_type_size = get_solidity_type_size(operation.tee_type)?;
         let plaintext_bytes: U256 = operation
             .value
             .parse()
             .map_err(|e| format!("Failed to parse input as uint256: {e}"))?;
-        if usize::from(tee_type_size) < plaintext_bytes.byte_len() {
+        if usize::from(solidity_type_size) < plaintext_bytes.byte_len() {
             let message = format!(
-                "plaintext size {} exceeds TEE type size {tee_type_size}",
+                "plaintext size {} exceeds TEE type size {solidity_type_size}",
                 plaintext_bytes.byte_len()
             );
             error!(message);
