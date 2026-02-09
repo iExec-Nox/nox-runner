@@ -1,4 +1,5 @@
 mod application;
+mod compute;
 mod config;
 mod crypto;
 mod events;
@@ -9,8 +10,8 @@ mod utils;
 use tracing::{debug, error};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use application::Application;
-use config::Config;
+use crate::application::Application;
+use crate::config::Config;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
