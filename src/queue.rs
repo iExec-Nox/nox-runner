@@ -167,7 +167,7 @@ impl QueueService {
             .value
             .parse()
             .map_err(|e| format!("Failed to parse input as uint256: {e}"))?;
-        if usize::from(solidity_type_size) < plaintext_bytes.byte_len() {
+        if solidity_type_size < plaintext_bytes.byte_len() {
             let message = format!(
                 "plaintext size {} exceeds TEE type size {solidity_type_size}",
                 plaintext_bytes.byte_len()
