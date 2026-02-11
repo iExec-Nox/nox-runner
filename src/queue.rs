@@ -1,8 +1,7 @@
 use alloy_primitives::{Address, U256, hex};
-use async_nats::Message;
 use chrono::NaiveDateTime;
 use serde::Deserialize;
-use tracing::{debug, error, info};
+use tracing::{error, info};
 
 use crate::compute::{
     arithmetic::{Operator as ArithmeticOperator, SolidityValue, compute},
@@ -35,21 +34,17 @@ impl QueueService {
         }
     }
 
-    /// Deserialize and handle message received from NATS.
+    /// Handle message representing a transaction received from NATS.
     ///
     /// A valid message should represent confidential operations of a single transaction.
     /// When all result handles have been collected, they are sent to handle gateway in a single batch.
-    pub async fn handle_message(&self, message: Message) -> Result<(), String> {
-        debug!("Received message {:?}", message);
-        let transaction_message = serde_json::from_slice::<TransactionMessage>(&message.payload)
-            .map_err(|e| format!("Failed to deserialize message: {e}"))?;
+    pub async fn handle_message(
+        &self,
+        transaction_message: TransactionMessage,
+    ) -> Result<(), String> {
         let mut result_entries = Vec::new();
         for event in transaction_message.events {
-            info!(
-                event.log_index,
-                caller = event.caller.to_string(),
-                "Received event"
-            );
+            info!(log_index = event.log_index, "Received event");
             let result_entry = match event.operator {
                 Operator::PlaintextToEncrypted(operation) => {
                     self.do_plaintext_to_encrypted(operation).await?
