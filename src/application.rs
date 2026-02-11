@@ -1,5 +1,5 @@
 use futures_util::StreamExt;
-use tracing::{error, info, info_span};
+use tracing::{error, info};
 
 use crate::config::Config;
 use crate::crypto::CryptoService;
@@ -32,6 +32,7 @@ impl Application {
                 &self.config.nats_consumer_name,
                 async_nats::jetstream::consumer::pull::Config {
                     durable_name: Some(self.config.nats_consumer_name.clone()),
+                    max_deliver: self.config.nats_consumer_max_deliver,
                     ..Default::default()
                 },
             )
@@ -58,16 +59,16 @@ impl Application {
                                     continue;
                                 }
                             };
-                            let _span = info_span!("transaction", hash = transaction_message.transaction_hash).entered();
+                            let transaction_hash = transaction_message.transaction_hash.clone();
                             match self.queue_svc.handle_message(transaction_message).await {
                                 Ok(_) => {
-                                    info!("Compute PASS");
+                                    info!(transaction_hash, "Compute PASS");
                                     match msg.ack().await {
-                                        Ok(_) => info!("ACK sent"),
-                                        Err(ack_err) => error!("ACK could not be sent {ack_err}"),
+                                        Ok(_) => info!(transaction_hash, "ACK sent"),
+                                        Err(ack_err) => error!(transaction_hash, "ACK could not be sent {ack_err}"),
                                     };
                                 },
-                                Err(e) => error!("Compute FAIL {e}"),
+                                Err(e) => error!(transaction_hash, "Compute FAIL {e}"),
                             }
                         },
                         Err(e) => error!("Failed to pull message {e}"),

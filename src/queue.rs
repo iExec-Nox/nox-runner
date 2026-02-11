@@ -44,10 +44,14 @@ impl QueueService {
     ) -> Result<(), String> {
         let mut result_entries = Vec::new();
         for event in transaction_message.events {
-            info!(log_index = event.log_index, "Received event");
+            info!(
+                transaction_hash = transaction_message.transaction_hash,
+                log_index = event.log_index,
+                "Received event"
+            );
             let result_entry = match event.operator {
                 Operator::PlaintextToEncrypted(operation) => {
-                    self.do_plaintext_to_encrypted(operation).await?
+                    self.do_plaintext_to_encrypted(operation)?
                 }
                 Operator::Add(operation) => {
                     self.compute(event.caller, ArithmeticOperator::Add, operation)
@@ -153,7 +157,7 @@ impl QueueService {
     /// Encrypt plaintext for storage in handle storage.
     ///
     /// A data size cannot be bigger than 32 bytes at the moment.
-    async fn do_plaintext_to_encrypted(
+    fn do_plaintext_to_encrypted(
         &self,
         operation: EncryptionOperation,
     ) -> Result<HandleEntry, String> {

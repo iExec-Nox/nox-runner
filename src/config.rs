@@ -8,6 +8,7 @@ pub struct Config {
     pub nats_url: String,
     pub nats_stream_name: String,
     pub nats_consumer_name: String,
+    pub nats_consumer_max_deliver: i64,
 }
 
 impl Config {
@@ -18,6 +19,7 @@ impl Config {
             .set_default("nats_url", "nats://localhost:4222")?
             .set_default("nats_stream_name", "nox_ingestor")?
             .set_default("nats_consumer_name", "nox_ingestor_consumer")?
+            .set_default("nats_consumer_max_deliver", 3)?
             .add_source(
                 Environment::with_prefix("NOX_RUNNER")
                     .prefix_separator("_")
