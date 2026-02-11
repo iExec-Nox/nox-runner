@@ -29,9 +29,9 @@ impl Application {
         let stream = jetstream.get_stream(&self.config.nats_stream_name).await?;
         let consumer = stream
             .get_or_create_consumer(
-                "consumer",
+                &self.config.nats_consumer_name,
                 async_nats::jetstream::consumer::pull::Config {
-                    durable_name: self.config.nats_consumer_durable_name.clone(),
+                    durable_name: Some(self.config.nats_consumer_name.clone()),
                     ..Default::default()
                 },
             )
@@ -47,15 +47,24 @@ impl Application {
                 Some(message) = subscriber.next() => {
                     match message {
                         Ok(msg) => {
-                            let transaction_message = serde_json::from_slice::<TransactionMessage>(&msg.payload)
-                                .map_err(|e| format!("Failed to deserialize message: {e}"))?;
+                            let transaction_message = match serde_json::from_slice::<TransactionMessage>(&msg.payload) {
+                                Ok(v) => v,
+                                Err(e) => {
+                                    error!("Failed to deserialize message: {e}");
+                                    match msg.ack().await {
+                                        Ok(_) => info!("ACK sent for invalid message"),
+                                        Err(ack_err) => error!("ACK could not be sent for invalid message: {ack_err}"),
+                                    }
+                                    continue;
+                                }
+                            };
                             let _span = info_span!("transaction", hash = transaction_message.transaction_hash).entered();
                             match self.queue_svc.handle_message(transaction_message).await {
                                 Ok(_) => {
                                     info!("Compute PASS");
                                     match msg.ack().await {
                                         Ok(_) => info!("ACK sent"),
-                                        Err(e) => error!("ACK could not be sent {e}"),
+                                        Err(ack_err) => error!("ACK could not be sent {ack_err}"),
                                     };
                                 },
                                 Err(e) => error!("Compute FAIL {e}"),
