@@ -8,7 +8,7 @@ use crate::compute::{
     get_solidity_type_from_handle, get_solidity_type_size,
 };
 use crate::crypto::CryptoService;
-use crate::events::{BinaryOperation, EncryptionOperation, Operator, TransactionMessage};
+use crate::events::{ArithmeticOperation, EncryptionOperation, Operator, TransactionMessage};
 use crate::handle_gateway::{GatewayClient, HandleEntry, TEEComputeResult};
 use crate::utils::to_hex_with_prefix;
 
@@ -89,7 +89,7 @@ impl QueueService {
         &self,
         caller: Address,
         operator: ArithmeticOperator,
-        operation: BinaryOperation,
+        operation: ArithmeticOperation,
     ) -> Result<HandleEntry, String> {
         let operand_handles = vec![operation.left_hand_operand, operation.right_hand_operand];
         let encrypted_operands = self

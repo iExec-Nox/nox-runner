@@ -5,7 +5,8 @@ use serde::Deserialize;
 pub type Handle = String;
 
 #[derive(Deserialize)]
-pub struct BinaryOperation {
+#[serde(rename_all = "camelCase")]
+pub struct ArithmeticOperation {
     pub left_hand_operand: Handle,
     pub right_hand_operand: Handle,
     pub result: Handle,
@@ -24,9 +25,9 @@ pub struct EncryptionOperation {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Operator {
     PlaintextToEncrypted(EncryptionOperation),
-    Add(BinaryOperation),
-    Sub(BinaryOperation),
-    Div(BinaryOperation),
+    Add(ArithmeticOperation),
+    Sub(ArithmeticOperation),
+    Div(ArithmeticOperation),
 }
 
 /// Individual event within a transaction
