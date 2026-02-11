@@ -3,6 +3,7 @@ use tracing::{error, info};
 
 use crate::config::Config;
 use crate::crypto::CryptoService;
+use crate::events::TransactionMessage;
 use crate::handle_gateway::GatewayClient;
 use crate::queue::QueueService;
 
@@ -19,9 +20,24 @@ impl Application {
         Ok(Application { config, queue_svc })
     }
 
+    /// Connects to existing NATS stream to consume messages.
+    ///
+    /// Received messages are deserialized as messages representing transactions.
     pub async fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
         let client = async_nats::connect(&self.config.nats_url).await?;
-        let mut subscriber = client.subscribe(self.config.nats_subject.clone()).await?;
+        let jetstream = async_nats::jetstream::new(client);
+        let stream = jetstream.get_stream(&self.config.nats_stream_name).await?;
+        let consumer = stream
+            .get_or_create_consumer(
+                &self.config.nats_consumer_name,
+                async_nats::jetstream::consumer::pull::Config {
+                    durable_name: Some(self.config.nats_consumer_name.clone()),
+                    max_deliver: self.config.nats_consumer_max_deliver,
+                    ..Default::default()
+                },
+            )
+            .await?;
+        let mut subscriber = consumer.messages().await?;
 
         loop {
             tokio::select! {
@@ -30,10 +46,33 @@ impl Application {
                    break;
                 }
                 Some(message) = subscriber.next() => {
-                    match self.queue_svc.handle_message(message).await {
-                        Ok(_) => info!("Compute PASS"),
-                        Err(e) => error!("Compute FAIL {}", e),
-                    };
+                    match message {
+                        Ok(msg) => {
+                            let transaction_message = match serde_json::from_slice::<TransactionMessage>(&msg.payload) {
+                                Ok(v) => v,
+                                Err(e) => {
+                                    error!("Failed to deserialize message: {e}");
+                                    match msg.ack().await {
+                                        Ok(_) => info!("ACK sent for invalid message"),
+                                        Err(ack_err) => error!("ACK could not be sent for invalid message: {ack_err}"),
+                                    }
+                                    continue;
+                                }
+                            };
+                            let transaction_hash = transaction_message.transaction_hash.clone();
+                            match self.queue_svc.handle_message(transaction_message).await {
+                                Ok(_) => {
+                                    info!(transaction_hash, "Compute PASS");
+                                    match msg.ack().await {
+                                        Ok(_) => info!(transaction_hash, "ACK sent"),
+                                        Err(ack_err) => error!(transaction_hash, "ACK could not be sent {ack_err}"),
+                                    };
+                                },
+                                Err(e) => error!(transaction_hash, "Compute FAIL {e}"),
+                            }
+                        },
+                        Err(e) => error!("Failed to pull message {e}"),
+                    }
                 }
             }
         }
