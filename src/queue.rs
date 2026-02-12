@@ -3,14 +3,17 @@ use chrono::NaiveDateTime;
 use serde::Deserialize;
 use tracing::{error, info};
 
-use crate::compute::{
-    arithmetic::{Operator as ArithmeticOperator, SolidityValue, compute},
-    get_solidity_type_from_handle, get_solidity_type_size,
-};
 use crate::crypto::CryptoService;
 use crate::events::{ArithmeticOperation, EncryptionOperation, Operator, TransactionMessage};
 use crate::handle_gateway::{GatewayClient, HandleEntry, TEEComputeResult};
 use crate::utils::to_hex_with_prefix;
+use crate::{
+    compute::{
+        arithmetic::{Operator as ArithmeticOperator, SolidityValue, compute, safe_compute},
+        get_solidity_type_from_handle, get_solidity_type_size,
+    },
+    events::SafeArithmeticOperation,
+};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -42,14 +45,15 @@ impl QueueService {
         &self,
         transaction_message: TransactionMessage,
     ) -> Result<(), String> {
-        let mut result_entries = Vec::new();
+        let mut tx_result_entries = Vec::new();
         for event in transaction_message.events {
             info!(
                 transaction_hash = transaction_message.transaction_hash,
                 log_index = event.log_index,
+                operator = ?event.operator,
                 "Received event"
             );
-            let result_entry = match event.operator {
+            let event_result_entries = match event.operator {
                 Operator::PlaintextToEncrypted(operation) => {
                     self.do_plaintext_to_encrypted(operation)?
                 }
@@ -61,19 +65,41 @@ impl QueueService {
                     self.compute(event.caller, ArithmeticOperator::Sub, operation)
                         .await?
                 }
+                Operator::Mul(operation) => {
+                    self.compute(event.caller, ArithmeticOperator::Mul, operation)
+                        .await?
+                }
                 Operator::Div(operation) => {
                     self.compute(event.caller, ArithmeticOperator::Div, operation)
                         .await?
                 }
+                Operator::SafeAdd(operation) => {
+                    self.safe_compute(event.caller, ArithmeticOperator::Add, operation)
+                        .await?
+                }
+                Operator::SafeSub(operation) => {
+                    self.safe_compute(event.caller, ArithmeticOperator::Sub, operation)
+                        .await?
+                }
+                Operator::SafeMul(operation) => {
+                    self.safe_compute(event.caller, ArithmeticOperator::Mul, operation)
+                        .await?
+                }
+                Operator::SafeDiv(operation) => {
+                    self.safe_compute(event.caller, ArithmeticOperator::Div, operation)
+                        .await?
+                }
             };
-            result_entries.push(result_entry);
+            for entry in event_result_entries {
+                tx_result_entries.push(entry);
+            }
         }
         let request = TEEComputeResult {
             chain_id: transaction_message.chain_id,
             block_number: transaction_message.block_number,
             caller: transaction_message.caller,
             transaction_hash: transaction_message.transaction_hash,
-            handles: result_entries,
+            handles: tx_result_entries,
         };
         self.handle_gateway
             .push_results(request)
@@ -90,15 +116,52 @@ impl QueueService {
         caller: Address,
         operator: ArithmeticOperator,
         operation: ArithmeticOperation,
-    ) -> Result<HandleEntry, String> {
+    ) -> Result<Vec<HandleEntry>, String> {
         let operand_handles = vec![operation.left_hand_operand, operation.right_hand_operand];
+        let result_handles = vec![operation.result.clone()];
+        let operands = self
+            .fetch_operands(caller, operand_handles, result_handles)
+            .await?;
+        let result = compute(operator, operands[0].clone(), operands[1].clone())?.to_bytes();
+        self.format_and_encrypt_result(operation.result, result)
+            .map(|entry| vec![entry])
+    }
+
+    async fn safe_compute(
+        &self,
+        caller: Address,
+        operator: ArithmeticOperator,
+        operation: SafeArithmeticOperation,
+    ) -> Result<Vec<HandleEntry>, String> {
+        let operand_handles = vec![operation.left_hand_operand, operation.right_hand_operand];
+        let result_handles = vec![operation.success.clone(), operation.result.clone()];
+        let operands = self
+            .fetch_operands(caller, operand_handles, result_handles)
+            .await?;
+        let (success, result) = safe_compute(operator, operands[0].clone(), operands[1].clone())?;
+        let mut success_bytes = [0u8; 32];
+        if success {
+            success_bytes[31] = 1;
+        }
+        let mut handles = Vec::<HandleEntry>::new();
+        handles.push(self.format_and_encrypt_result(operation.success, success_bytes)?);
+        handles.push(self.format_and_encrypt_result(operation.result, result.to_bytes())?);
+        Ok(handles)
+    }
+
+    async fn fetch_operands(
+        &self,
+        caller: Address,
+        operand_handles: Vec<String>,
+        result_handles: Vec<String>,
+    ) -> Result<Vec<SolidityValue>, String> {
         let encrypted_operands = self
             .handle_gateway
             .get_handles(
                 caller,
                 self.crypto_svc.public.clone(),
                 operand_handles.clone(),
-                vec![operation.result.clone()],
+                result_handles.clone(),
             )
             .await
             .map_err(|e| format!("Failed to fetch operands from handle gateway: {e}"))?;
@@ -116,8 +179,7 @@ impl QueueService {
                 operand_handles.len()
             ));
         }
-        let result = compute(operator, operands[0].clone(), operands[1].clone())?.to_bytes();
-        self.format_and_encrypt_result(operation.result, result)
+        Ok(operands)
     }
 
     /// Decrypts and converts an operand to its alloy-primitives type.
@@ -139,7 +201,7 @@ impl QueueService {
     fn do_plaintext_to_encrypted(
         &self,
         operation: EncryptionOperation,
-    ) -> Result<HandleEntry, String> {
+    ) -> Result<Vec<HandleEntry>, String> {
         let solidity_type_size = get_solidity_type_size(operation.tee_type)?;
         let plaintext_bytes: U256 = operation
             .value
@@ -154,6 +216,7 @@ impl QueueService {
             return Err(message);
         }
         self.format_and_encrypt_result(operation.handle, plaintext_bytes.to_be_bytes())
+            .map(|entry| vec![entry])
     }
 
     /// Formats and encrypts result from a 32-byte value to a valid solidity type size
