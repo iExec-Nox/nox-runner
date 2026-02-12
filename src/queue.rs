@@ -1,4 +1,4 @@
-use alloy_primitives::{Address, U256, hex};
+use alloy_primitives::{Address, U256};
 use chrono::NaiveDateTime;
 use serde::Deserialize;
 use tracing::{error, info};
@@ -133,27 +133,6 @@ impl QueueService {
         SolidityValue::from_bytes(solidity_type, result)
     }
 
-    /// Formats and encrypts result from a 32-byte value to a valid solidity type size
-    fn format_and_encrypt_result(
-        &self,
-        handle: String,
-        result: [u8; 32],
-    ) -> Result<HandleEntry, String> {
-        let solidity_type = get_solidity_type_from_handle(&handle)?;
-        let solidity_type_size = get_solidity_type_size(solidity_type)?;
-        let encrypted_result = self
-            .crypto_svc
-            .ecies_encrypt(&result[(32 - solidity_type_size)..32])?;
-        let handle_entry = HandleEntry {
-            handle,
-            ciphertext: hex::encode(encrypted_result.ciphertext),
-            public_key: hex::encode(encrypted_result.ephemeral_pubkey),
-            nonce: hex::encode(encrypted_result.nonce),
-            created_at: NaiveDateTime::default(),
-        };
-        Ok(handle_entry)
-    }
-
     /// Encrypt plaintext for storage in handle storage.
     ///
     /// A data size cannot be bigger than 32 bytes at the moment.
@@ -174,15 +153,27 @@ impl QueueService {
             error!(message);
             return Err(message);
         }
+        self.format_and_encrypt_result(operation.handle, plaintext_bytes.to_be_bytes())
+    }
+
+    /// Formats and encrypts result from a 32-byte value to a valid solidity type size
+    fn format_and_encrypt_result(
+        &self,
+        handle: String,
+        result: [u8; 32],
+    ) -> Result<HandleEntry, String> {
+        let solidity_type = get_solidity_type_from_handle(&handle)?;
+        let solidity_type_size = get_solidity_type_size(solidity_type)?;
         let encrypted_result = self
             .crypto_svc
-            .ecies_encrypt(&plaintext_bytes.to_be_bytes_trimmed_vec())?;
-        Ok(HandleEntry {
-            handle: operation.handle,
+            .ecies_encrypt(&result[(32 - solidity_type_size)..32])?;
+        let handle_entry = HandleEntry {
+            handle,
             ciphertext: to_hex_with_prefix(&encrypted_result.ciphertext),
             public_key: to_hex_with_prefix(&encrypted_result.ephemeral_pubkey),
             nonce: to_hex_with_prefix(&encrypted_result.nonce),
             created_at: NaiveDateTime::default(),
-        })
+        };
+        Ok(handle_entry)
     }
 }
