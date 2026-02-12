@@ -127,6 +127,9 @@ impl QueueService {
             .map(|entry| vec![entry])
     }
 
+    /// Performs a safe arithmetic operation
+    ///
+    /// Retrieves operands from handle gateway, decrypts them and returns a result hande.
     async fn safe_compute(
         &self,
         caller: Address,
@@ -149,6 +152,9 @@ impl QueueService {
         ])
     }
 
+    /// Fetches operands from the handle gateway for a required computation.
+    ///
+    /// The handle gateway checks at the same time that results handles do not exist.
     async fn fetch_operands(
         &self,
         caller: Address,
