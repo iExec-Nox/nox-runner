@@ -143,10 +143,10 @@ impl QueueService {
         if success {
             success_bytes[31] = 1;
         }
-        let mut handles = Vec::<HandleEntry>::new();
-        handles.push(self.format_and_encrypt_result(operation.success, success_bytes)?);
-        handles.push(self.format_and_encrypt_result(operation.result, result.to_bytes())?);
-        Ok(handles)
+        Ok(vec![
+            self.format_and_encrypt_result(operation.success, success_bytes)?,
+            self.format_and_encrypt_result(operation.result, result.to_bytes())?,
+        ])
     }
 
     async fn fetch_operands(
