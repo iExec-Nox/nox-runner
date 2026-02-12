@@ -14,6 +14,7 @@ pub struct ArithmeticOperation {
 
 /// Encryption operation (plaintext to encrypted)
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct EncryptionOperation {
     pub value: String,
     pub tee_type: u8,
@@ -22,7 +23,7 @@ pub struct EncryptionOperation {
 
 /// Event payload with typed variants
 #[derive(Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(rename_all = "camelCase", tag = "type")]
 pub enum Operator {
     PlaintextToEncrypted(EncryptionOperation),
     Add(ArithmeticOperation),
@@ -32,6 +33,7 @@ pub enum Operator {
 
 /// Individual event within a transaction
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TransactionEvent {
     pub log_index: u64,
     pub caller: Address,
@@ -41,6 +43,7 @@ pub struct TransactionEvent {
 
 /// Message format grouping events by transaction
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TransactionMessage {
     /// Chain ID where the events occurred
     pub chain_id: u32,
