@@ -4,16 +4,8 @@ use serde::Deserialize;
 /// Handle type for encrypted values (hex-encoded bytes32)
 pub type Handle = String;
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ArithmeticOperation {
-    pub left_hand_operand: Handle,
-    pub right_hand_operand: Handle,
-    pub result: Handle,
-}
-
 /// Encryption operation (plaintext to encrypted)
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EncryptionOperation {
     pub value: String,
@@ -21,18 +13,40 @@ pub struct EncryptionOperation {
     pub handle: Handle,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArithmeticOperation {
+    pub left_hand_operand: Handle,
+    pub right_hand_operand: Handle,
+    pub result: Handle,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SafeArithmeticOperation {
+    pub left_hand_operand: Handle,
+    pub right_hand_operand: Handle,
+    pub success: Handle,
+    pub result: Handle,
+}
+
 /// Event payload with typed variants
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum Operator {
     PlaintextToEncrypted(EncryptionOperation),
     Add(ArithmeticOperation),
     Sub(ArithmeticOperation),
+    Mul(ArithmeticOperation),
     Div(ArithmeticOperation),
+    SafeAdd(SafeArithmeticOperation),
+    SafeSub(SafeArithmeticOperation),
+    SafeMul(SafeArithmeticOperation),
+    SafeDiv(SafeArithmeticOperation),
 }
 
 /// Individual event within a transaction
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionEvent {
     pub log_index: u64,

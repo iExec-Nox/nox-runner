@@ -6,6 +6,7 @@ use alloy_primitives::{Signed, Uint};
 pub enum Operator {
     Add,
     Sub,
+    Mul,
     Div,
 }
 
@@ -57,9 +58,9 @@ impl SolidityValue {
     }
 }
 
-/// Performs Add, Sub or Div arithmetic operations on 16 or 256 bits signed or unsiged integers.
+/// Performs Add, Sub, Mul or Div arithmetic operations on 16 or 256 bits signed or unsiged integers.
 ///
-/// Add and Sub operations wrap around at the boundary of each type.
+/// Add, Sub and Mul operations wrap around at the boundary of each type.
 pub fn compute(
     operation: Operator,
     left_hand_operand: SolidityValue,
@@ -90,6 +91,18 @@ pub fn compute(
         (Operator::Sub, SolidityValue::Int256(a), SolidityValue::Int256(b)) => {
             Ok(SolidityValue::Int256(a.wrapping_sub(b)))
         }
+        (Operator::Mul, SolidityValue::Uint16(a), SolidityValue::Uint16(b)) => {
+            Ok(SolidityValue::Uint16(a.wrapping_mul(b)))
+        }
+        (Operator::Mul, SolidityValue::Uint256(a), SolidityValue::Uint256(b)) => {
+            Ok(SolidityValue::Uint256(a.wrapping_mul(b)))
+        }
+        (Operator::Mul, SolidityValue::Int16(a), SolidityValue::Int16(b)) => {
+            Ok(SolidityValue::Int16(a.wrapping_mul(b)))
+        }
+        (Operator::Mul, SolidityValue::Int256(a), SolidityValue::Int256(b)) => {
+            Ok(SolidityValue::Int256(a.wrapping_mul(b)))
+        }
         (Operator::Div, SolidityValue::Uint16(a), SolidityValue::Uint16(b)) => {
             Ok(SolidityValue::Uint16(a / b))
         }
@@ -101,6 +114,133 @@ pub fn compute(
         }
         (Operator::Div, SolidityValue::Int256(a), SolidityValue::Int256(b)) => {
             Ok(SolidityValue::Int256(a / b))
+        }
+        _ => Err("Unsupported operation".to_string()),
+    }
+}
+
+/// Performs checked Add, Sub, Mul or Div arithmetic operations on 16 or 256 bits signed or unsiged integers.
+///
+/// On overflow, the method will mostly return the (false, ZERO) tuple.
+/// If a result can be computed without overflowing, the method will return a (true, result) tuple.
+/// The second member of the returned tuple will be a valid SolidityValue.
+pub fn safe_compute(
+    operation: Operator,
+    left_hand_operand: SolidityValue,
+    right_hand_operand: SolidityValue,
+) -> Result<(bool, SolidityValue), String> {
+    match (operation, left_hand_operand, right_hand_operand) {
+        (Operator::Add, SolidityValue::Uint16(a), SolidityValue::Uint16(b)) => {
+            let (success, result) = match a.checked_add(b) {
+                Some(value) => (true, value),
+                None => (false, Uint::<16, 1>::ZERO),
+            };
+            Ok((success, SolidityValue::Uint16(result)))
+        }
+        (Operator::Add, SolidityValue::Uint256(a), SolidityValue::Uint256(b)) => {
+            let (success, result) = match a.checked_add(b) {
+                Some(value) => (true, value),
+                None => (false, Uint::<256, 4>::ZERO),
+            };
+            Ok((success, SolidityValue::Uint256(result)))
+        }
+        (Operator::Add, SolidityValue::Int16(a), SolidityValue::Int16(b)) => {
+            let (success, result) = match a.checked_add(b) {
+                Some(value) => (true, value),
+                None => (false, Signed::<16, 1>::ZERO),
+            };
+            Ok((success, SolidityValue::Int16(result)))
+        }
+        (Operator::Add, SolidityValue::Int256(a), SolidityValue::Int256(b)) => {
+            let (success, result) = match a.checked_add(b) {
+                Some(value) => (true, value),
+                None => (false, Signed::<256, 4>::ZERO),
+            };
+            Ok((success, SolidityValue::Int256(result)))
+        }
+        (Operator::Sub, SolidityValue::Uint16(a), SolidityValue::Uint16(b)) => {
+            let (success, result) = match a.checked_sub(b) {
+                Some(value) => (true, value),
+                None => (false, Uint::<16, 1>::ZERO),
+            };
+            Ok((success, SolidityValue::Uint16(result)))
+        }
+        (Operator::Sub, SolidityValue::Uint256(a), SolidityValue::Uint256(b)) => {
+            let (success, result) = match a.checked_sub(b) {
+                Some(value) => (true, value),
+                None => (false, Uint::<256, 4>::ZERO),
+            };
+            Ok((success, SolidityValue::Uint256(result)))
+        }
+        (Operator::Sub, SolidityValue::Int16(a), SolidityValue::Int16(b)) => {
+            let (success, result) = match a.checked_sub(b) {
+                Some(value) => (true, value),
+                None => (false, Signed::<16, 1>::ZERO),
+            };
+            Ok((success, SolidityValue::Int16(result)))
+        }
+        (Operator::Sub, SolidityValue::Int256(a), SolidityValue::Int256(b)) => {
+            let (success, result) = match a.checked_sub(b) {
+                Some(value) => (true, value),
+                None => (false, Signed::<256, 4>::ZERO),
+            };
+            Ok((success, SolidityValue::Int256(result)))
+        }
+        (Operator::Mul, SolidityValue::Uint16(a), SolidityValue::Uint16(b)) => {
+            let (success, result) = match a.checked_mul(b) {
+                Some(value) => (true, value),
+                None => (false, Uint::<16, 1>::ZERO),
+            };
+            Ok((success, SolidityValue::Uint16(result)))
+        }
+        (Operator::Mul, SolidityValue::Uint256(a), SolidityValue::Uint256(b)) => {
+            let (success, result) = match a.checked_mul(b) {
+                Some(value) => (true, value),
+                None => (false, Uint::<256, 4>::ZERO),
+            };
+            Ok((success, SolidityValue::Uint256(result)))
+        }
+        (Operator::Mul, SolidityValue::Int16(a), SolidityValue::Int16(b)) => {
+            let (success, result) = match a.checked_mul(b) {
+                Some(value) => (true, value),
+                None => (false, Signed::<16, 1>::ZERO),
+            };
+            Ok((success, SolidityValue::Int16(result)))
+        }
+        (Operator::Mul, SolidityValue::Int256(a), SolidityValue::Int256(b)) => {
+            let (success, result) = match a.checked_mul(b) {
+                Some(value) => (true, value),
+                None => (false, Signed::<256, 4>::ZERO),
+            };
+            Ok((success, SolidityValue::Int256(result)))
+        }
+        (Operator::Div, SolidityValue::Uint16(a), SolidityValue::Uint16(b)) => {
+            let (success, result) = match a.checked_div(b) {
+                Some(value) => (true, value),
+                None => (false, Uint::<16, 1>::ZERO),
+            };
+            Ok((success, SolidityValue::Uint16(result)))
+        }
+        (Operator::Div, SolidityValue::Uint256(a), SolidityValue::Uint256(b)) => {
+            let (success, result) = match a.checked_div(b) {
+                Some(value) => (true, value),
+                None => (false, Uint::<256, 4>::ZERO),
+            };
+            Ok((success, SolidityValue::Uint256(result)))
+        }
+        (Operator::Div, SolidityValue::Int16(a), SolidityValue::Int16(b)) => {
+            let (success, result) = match a.checked_div(b) {
+                Some(value) => (true, value),
+                None => (false, Signed::<16, 1>::ZERO),
+            };
+            Ok((success, SolidityValue::Int16(result)))
+        }
+        (Operator::Div, SolidityValue::Int256(a), SolidityValue::Int256(b)) => {
+            let (success, result) = match a.checked_div(b) {
+                Some(value) => (true, value),
+                None => (false, Signed::<256, 4>::ZERO),
+            };
+            Ok((success, SolidityValue::Int256(result)))
         }
         _ => Err("Unsupported operation".to_string()),
     }
