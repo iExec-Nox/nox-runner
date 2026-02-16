@@ -1,3 +1,5 @@
+//! Sructs to deserialize received [`TransactionMessage`]s.
+
 use alloy_primitives::Address;
 use serde::Deserialize;
 
@@ -30,6 +32,23 @@ pub struct SafeArithmeticOperation {
     pub result: Handle,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BooleanOperation {
+    pub left_hand_operand: Handle,
+    pub right_hand_operand: Handle,
+    pub result: Handle,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SelectOperation {
+    pub condition: Handle,
+    pub if_true: Handle,
+    pub if_false: Handle,
+    pub result: Handle,
+}
+
 /// Event payload with typed variants
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "type")]
@@ -43,6 +62,13 @@ pub enum Operator {
     SafeSub(SafeArithmeticOperation),
     SafeMul(SafeArithmeticOperation),
     SafeDiv(SafeArithmeticOperation),
+    Eq(BooleanOperation),
+    Ne(BooleanOperation),
+    Ge(BooleanOperation),
+    Gt(BooleanOperation),
+    Le(BooleanOperation),
+    Lt(BooleanOperation),
+    Select(SelectOperation),
 }
 
 /// Individual event within a transaction

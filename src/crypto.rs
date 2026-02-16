@@ -1,3 +1,5 @@
+//! ECIES implementation for operands decryption and results encryption.
+
 use aes_gcm::{
     Aes256Gcm, Nonce,
     aead::{Aead, KeyInit, generic_array::GenericArray},

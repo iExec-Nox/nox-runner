@@ -1,15 +1,22 @@
+//! Handle a [`TransactionMessage`] received through NATS.
+
 use alloy_primitives::{Address, U256};
 use chrono::NaiveDateTime;
 use serde::Deserialize;
 use tracing::{error, info};
 
 use crate::crypto::CryptoService;
-use crate::events::{ArithmeticOperation, EncryptionOperation, Operator, TransactionMessage};
+use crate::events::{
+    ArithmeticOperation, BooleanOperation, EncryptionOperation, Operator, SelectOperation,
+    TransactionMessage,
+};
 use crate::handle_gateway::{GatewayClient, HandleEntry, TEEComputeResult};
 use crate::utils::to_hex_with_prefix;
 use crate::{
     compute::{
-        arithmetic::{Operator as ArithmeticOperator, SolidityValue, compute, safe_compute},
+        SolidityValue,
+        arithmetic::{Operator as ArithmeticOperator, compute, safe_compute},
+        boolean::{Operator as BooleanOperator, compare, select},
         get_solidity_type_from_handle, get_solidity_type_size,
     },
     events::SafeArithmeticOperation,
@@ -24,6 +31,9 @@ pub struct InputEntry {
     pub iv: String,
 }
 
+/// Struct to deal with all events of a message corresponding to a given transaction on-chain.
+///
+/// Call modules and methods from [`super::compute`] to perform actual computations.
 pub struct QueueService {
     crypto_svc: CryptoService,
     handle_gateway: GatewayClient,
@@ -54,9 +64,7 @@ impl QueueService {
                 "Received event"
             );
             let event_result_entries = match event.operator {
-                Operator::PlaintextToEncrypted(operation) => {
-                    self.do_plaintext_to_encrypted(operation)?
-                }
+                Operator::PlaintextToEncrypted(operation) => self.encrypt_plaintext(operation)?,
                 Operator::Add(operation) => {
                     self.compute(event.caller, ArithmeticOperator::Add, operation)
                         .await?
@@ -89,6 +97,31 @@ impl QueueService {
                     self.safe_compute(event.caller, ArithmeticOperator::Div, operation)
                         .await?
                 }
+                Operator::Eq(operation) => {
+                    self.compare(event.caller, BooleanOperator::Eq, operation)
+                        .await?
+                }
+                Operator::Ne(operation) => {
+                    self.compare(event.caller, BooleanOperator::Ne, operation)
+                        .await?
+                }
+                Operator::Ge(operation) => {
+                    self.compare(event.caller, BooleanOperator::Ge, operation)
+                        .await?
+                }
+                Operator::Gt(operation) => {
+                    self.compare(event.caller, BooleanOperator::Gt, operation)
+                        .await?
+                }
+                Operator::Le(operation) => {
+                    self.compare(event.caller, BooleanOperator::Le, operation)
+                        .await?
+                }
+                Operator::Lt(operation) => {
+                    self.compare(event.caller, BooleanOperator::Lt, operation)
+                        .await?
+                }
+                Operator::Select(operation) => self.select(event.caller, operation).await?,
             };
             for entry in event_result_entries {
                 tx_result_entries.push(entry);
@@ -108,7 +141,55 @@ impl QueueService {
         Ok(())
     }
 
-    /// Performs an arithmetic computation
+    /// Encrypt plaintext for storage in handle storage.
+    ///
+    /// A data size cannot be bigger than 32 bytes at the moment.
+    fn encrypt_plaintext(
+        &self,
+        operation: EncryptionOperation,
+    ) -> Result<Vec<HandleEntry>, String> {
+        let solidity_type_size = get_solidity_type_size(operation.tee_type)?;
+        let plaintext_bytes: U256 = operation
+            .value
+            .parse()
+            .map_err(|e| format!("Failed to parse input as uint256: {e}"))?;
+        if solidity_type_size < plaintext_bytes.byte_len() {
+            let message = format!(
+                "plaintext size {} exceeds TEE type size {solidity_type_size}",
+                plaintext_bytes.byte_len()
+            );
+            error!(message);
+            return Err(message);
+        }
+        self.format_and_encrypt_result(operation.handle, plaintext_bytes.to_be_bytes())
+            .map(|entry| vec![entry])
+    }
+
+    /// Performs a comparison between 2 handles representing a same numeric type and
+    /// returns a new handle representing a boolean.
+    ///
+    /// Comparisons are implemented in [`crate::compute::boolean::compare`]
+    async fn compare(
+        &self,
+        caller: Address,
+        operator: BooleanOperator,
+        operation: BooleanOperation,
+    ) -> Result<Vec<HandleEntry>, String> {
+        let operand_handles = vec![operation.left_hand_operand, operation.right_hand_operand];
+        let result_handles = vec![operation.result.clone()];
+        let operands = self
+            .fetch_operands(caller, operand_handles, result_handles)
+            .await?;
+        let result = compare(operator, operands[0].clone(), operands[1].clone())?;
+        let mut result_bytes = [0u8; 32];
+        if result {
+            result_bytes[31] = 1;
+        }
+        self.format_and_encrypt_result(operation.result, result_bytes)
+            .map(|entry| vec![entry])
+    }
+
+    /// Performs an arithmetic computation.
     ///
     /// Retrieves operands from handle gateway, decrypts them and returns a result hande.
     async fn compute(
@@ -127,7 +208,7 @@ impl QueueService {
             .map(|entry| vec![entry])
     }
 
-    /// Performs a safe arithmetic operation
+    /// Performs a safe arithmetic operation.
     ///
     /// Retrieves operands from handle gateway, decrypts them and returns a result hande.
     async fn safe_compute(
@@ -150,6 +231,29 @@ impl QueueService {
             self.format_and_encrypt_result(operation.success, success_bytes)?,
             self.format_and_encrypt_result(operation.result, result.to_bytes())?,
         ])
+    }
+
+    /// Returns one between 2 handles depending on a condition.
+    ///
+    /// This is equivalent to if { ... } else { ... } or a ternary operator.
+    async fn select(
+        &self,
+        caller: Address,
+        operation: SelectOperation,
+    ) -> Result<Vec<HandleEntry>, String> {
+        let operand_handles = vec![operation.condition, operation.if_true, operation.if_false];
+        let result_handles = vec![operation.result.clone()];
+        let operands = self
+            .fetch_operands(caller, operand_handles, result_handles)
+            .await?;
+        let result = select(
+            operands[0].clone(),
+            operands[1].clone(),
+            operands[2].clone(),
+        )?
+        .to_bytes();
+        self.format_and_encrypt_result(operation.result, result)
+            .map(|entry| vec![entry])
     }
 
     /// Fetches operands from the handle gateway for a required computation.
@@ -199,30 +303,6 @@ impl QueueService {
         result[(32 - data_bytes.len())..32].copy_from_slice(&data_bytes);
         let solidity_type = get_solidity_type_from_handle(&entry.handle)?;
         SolidityValue::from_bytes(solidity_type, result)
-    }
-
-    /// Encrypt plaintext for storage in handle storage.
-    ///
-    /// A data size cannot be bigger than 32 bytes at the moment.
-    fn do_plaintext_to_encrypted(
-        &self,
-        operation: EncryptionOperation,
-    ) -> Result<Vec<HandleEntry>, String> {
-        let solidity_type_size = get_solidity_type_size(operation.tee_type)?;
-        let plaintext_bytes: U256 = operation
-            .value
-            .parse()
-            .map_err(|e| format!("Failed to parse input as uint256: {e}"))?;
-        if solidity_type_size < plaintext_bytes.byte_len() {
-            let message = format!(
-                "plaintext size {} exceeds TEE type size {solidity_type_size}",
-                plaintext_bytes.byte_len()
-            );
-            error!(message);
-            return Err(message);
-        }
-        self.format_and_encrypt_result(operation.handle, plaintext_bytes.to_be_bytes())
-            .map(|entry| vec![entry])
     }
 
     /// Formats and encrypts result from a 32-byte value to a valid solidity type size

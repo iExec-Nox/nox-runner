@@ -1,61 +1,14 @@
 //! Arithmetic operations support.
 
+use super::SolidityValue;
 use alloy_primitives::{Signed, Uint};
 
-/// Supported arithmetic operators
+/// Supported arithmetic operators.
 pub enum Operator {
     Add,
     Sub,
     Mul,
     Div,
-}
-
-/// Wraps around signed and unsigned integers provided by alloy-primitives.
-///
-/// Types are ordered following Solidity types encoding specification.
-#[derive(Clone, Debug, PartialEq)]
-pub enum SolidityValue {
-    Uint16(Uint<16, 1>),
-    Uint256(Uint<256, 4>),
-    Int16(Signed<16, 1>),
-    Int256(Signed<256, 4>),
-}
-
-impl SolidityValue {
-    /// Converts from 32 big-endian bytes to alloy-primitives type
-    pub fn from_bytes(type_byte: u8, value_bytes: [u8; 32]) -> Result<Self, String> {
-        match type_byte {
-            5_u8 => Ok(SolidityValue::Uint16(Uint::<16, 1>::from_be_bytes::<2>(
-                value_bytes[30..32]
-                    .try_into()
-                    .map_err(|_| "Failed to convert {value_bytes:?} bytes to uint16")?,
-            ))),
-            35_u8 => Ok(SolidityValue::Uint256(Uint::<256, 4>::from_be_bytes(
-                value_bytes,
-            ))),
-            37_u8 => Ok(SolidityValue::Int16(Signed::<16, 1>::from_be_bytes::<2>(
-                value_bytes[30..32]
-                    .try_into()
-                    .map_err(|_| format!("Failed to convert {value_bytes:?} bytes to int16"))?,
-            ))),
-            67_u8 => Ok(SolidityValue::Int256(Signed::<256, 4>::from_be_bytes(
-                value_bytes,
-            ))),
-            v => Err(format!("Unsupported type {v} cannot be converted")),
-        }
-    }
-
-    /// Converts from alloy-primitives type to 32 big-endian bytes
-    pub fn to_bytes(&self) -> [u8; 32] {
-        let mut result = [0u8; 32];
-        match self {
-            SolidityValue::Uint16(v) => result[30..32].copy_from_slice(&v.to_be_bytes::<2>()),
-            SolidityValue::Uint256(v) => result.copy_from_slice(&v.to_be_bytes::<32>()),
-            SolidityValue::Int16(v) => result[30..32].copy_from_slice(&v.to_be_bytes::<2>()),
-            SolidityValue::Int256(v) => result.copy_from_slice(&v.to_be_bytes::<32>()),
-        }
-        result
-    }
 }
 
 /// Performs Add, Sub, Mul or Div arithmetic operations on 16 or 256 bits signed or unsiged integers.
