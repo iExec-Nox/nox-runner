@@ -1,9 +1,71 @@
 //! Off-chain computations producing results compatible with Solidity.
+//!
+//! The module contains the SolidityValue enum to encode and decode handle values
+//! to alloy-primitives associated types. This is the API which allows to perform
+//! computations on all supported types.
 
-use alloy_primitives::hex;
+use alloy_primitives::{Signed, Uint, hex};
 use tracing::error;
 
 pub mod arithmetic;
+pub mod boolean;
+
+/// Wraps around booleans and signed and unsigned integers provided by alloy-primitives.
+///
+/// Types are ordered following Solidity types encoding specification.
+#[derive(Clone, Debug, PartialEq)]
+pub enum SolidityValue {
+    Boolean(bool),
+    Uint16(Uint<16, 1>),
+    Uint256(Uint<256, 4>),
+    Int16(Signed<16, 1>),
+    Int256(Signed<256, 4>),
+}
+
+impl SolidityValue {
+    /// Converts from 32 big-endian bytes to alloy-primitives type
+    pub fn from_bytes(type_byte: u8, value_bytes: [u8; 32]) -> Result<Self, String> {
+        Ok(match type_byte {
+            0_u8 => {
+                if value_bytes[31] == 1 {
+                    SolidityValue::Boolean(true)
+                } else {
+                    SolidityValue::Boolean(false)
+                }
+            }
+            5_u8 => SolidityValue::Uint16(Uint::<16, 1>::from_be_bytes::<2>(
+                value_bytes[30..32]
+                    .try_into()
+                    .map_err(|_| format!("Failed to convert {value_bytes:?} bytes to uint16"))?,
+            )),
+            35_u8 => SolidityValue::Uint256(Uint::<256, 4>::from_be_bytes(value_bytes)),
+            37_u8 => SolidityValue::Int16(Signed::<16, 1>::from_be_bytes::<2>(
+                value_bytes[30..32]
+                    .try_into()
+                    .map_err(|_| format!("Failed to convert {value_bytes:?} bytes to int16"))?,
+            )),
+            67_u8 => SolidityValue::Int256(Signed::<256, 4>::from_be_bytes(value_bytes)),
+            v => return Err(format!("Unsupported type {v} cannot be converted")),
+        })
+    }
+
+    /// Converts from alloy-primitives type to 32 big-endian bytes
+    pub fn to_bytes(&self) -> [u8; 32] {
+        let mut result = [0_u8; 32];
+        match self {
+            SolidityValue::Boolean(v) => {
+                if *v {
+                    result[31] = 1
+                }
+            }
+            SolidityValue::Uint16(v) => result[30..32].copy_from_slice(&v.to_be_bytes::<2>()),
+            SolidityValue::Uint256(v) => result.copy_from_slice(&v.to_be_bytes::<32>()),
+            SolidityValue::Int16(v) => result[30..32].copy_from_slice(&v.to_be_bytes::<2>()),
+            SolidityValue::Int256(v) => result.copy_from_slice(&v.to_be_bytes::<32>()),
+        }
+        result
+    }
+}
 
 /// Extracts solidity type from handle hex value
 pub fn get_solidity_type_from_handle(handle: &str) -> Result<u8, String> {

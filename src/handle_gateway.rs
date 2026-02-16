@@ -1,3 +1,8 @@
+//! API to fetch operands from and push results to the Handle Gateway.
+//!
+//! All operands and results are encrypted with ECIES.
+//! See [`super::crypto`] for ECIES related operations.
+
 use alloy_primitives::Address;
 use chrono::NaiveDateTime;
 use reqwest::Client;
