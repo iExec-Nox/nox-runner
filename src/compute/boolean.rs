@@ -12,7 +12,7 @@ pub enum Operator {
     Lt,
 }
 
-/// Implements boolean comparisons on 16 or 256 bits signed or unsiged integers.
+/// Implements boolean comparisons on 16 or 256 bits signed or unsigned integers.
 pub fn compare(
     operation: Operator,
     left_hand_operand: SolidityValue,

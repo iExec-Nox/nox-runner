@@ -11,7 +11,7 @@ pub enum Operator {
     Div,
 }
 
-/// Performs Add, Sub, Mul or Div arithmetic operations on 16 or 256 bits signed or unsiged integers.
+/// Performs Add, Sub, Mul or Div arithmetic operations on 16 or 256 bits signed or unsigned integers.
 ///
 /// Add, Sub and Mul operations wrap around at the boundary of each type.
 pub fn compute(

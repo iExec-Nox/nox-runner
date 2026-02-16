@@ -1,4 +1,4 @@
-//! Sructs to deserialize received [`TransactionMessage`]s.
+//! Structs to deserialize received [`TransactionMessage`]s.
 
 use alloy_primitives::Address;
 use serde::Deserialize;
