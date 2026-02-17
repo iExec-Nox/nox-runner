@@ -6,7 +6,7 @@ use serde::Deserialize;
 /// Handle type for encrypted values (hex-encoded bytes32)
 pub type Handle = String;
 
-/// Encryption operation (plaintext to encrypted)
+/// Describes the 2 plaintext operands to encrypt and associat to the result handle.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EncryptionOperation {
@@ -15,6 +15,7 @@ pub struct EncryptionOperation {
     pub handle: Handle,
 }
 
+/// Describes the 2 operand and 1 result handles for an arithmetic operation.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ArithmeticOperation {
@@ -23,6 +24,7 @@ pub struct ArithmeticOperation {
     pub result: Handle,
 }
 
+/// Describes the 2 operand and 2 result handles for a safe arithmetic operation.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SafeArithmeticOperation {
@@ -32,6 +34,7 @@ pub struct SafeArithmeticOperation {
     pub result: Handle,
 }
 
+/// Describes the 3 operand and 1 result handles for a boolean comparison.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BooleanOperation {
@@ -40,6 +43,7 @@ pub struct BooleanOperation {
     pub result: Handle,
 }
 
+/// Describes the 3 operand and 1 result handles for a select operation.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SelectOperation {
@@ -47,6 +51,42 @@ pub struct SelectOperation {
     pub if_true: Handle,
     pub if_false: Handle,
     pub result: Handle,
+}
+
+/// Describes the 3 operand and 3 result handles for a transfer operation.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransferOperation {
+    pub balance_from: Handle,
+    pub balance_to: Handle,
+    pub amount: Handle,
+    pub success: Handle,
+    pub new_balance_from: Handle,
+    pub new_balance_to: Handle,
+}
+
+/// Describes the 3 operand and 3 result handles for a mint operation.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MintOperation {
+    pub balance_to: Handle,
+    pub amount: Handle,
+    pub total_supply: Handle,
+    pub success: Handle,
+    pub new_balance_to: Handle,
+    pub new_total_supply: Handle,
+}
+
+/// Describes the 3 operand and 3 result handles for a burn operation.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BurnOperation {
+    pub balance_from: Handle,
+    pub amount: Handle,
+    pub total_supply: Handle,
+    pub success: Handle,
+    pub new_balance_from: Handle,
+    pub new_total_supply: Handle,
 }
 
 /// Event payload with typed variants
@@ -69,6 +109,9 @@ pub enum Operator {
     Le(BooleanOperation),
     Lt(BooleanOperation),
     Select(SelectOperation),
+    Transfer(TransferOperation),
+    Mint(MintOperation),
+    Burn(BurnOperation),
 }
 
 /// Individual event within a transaction
