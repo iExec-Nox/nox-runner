@@ -5,8 +5,8 @@ use crate::config::Config;
 use crate::crypto::CryptoService;
 use crate::events::TransactionMessage;
 use crate::handle_gateway::GatewayClient;
-use crate::rpc::NoxClient;
 use crate::queue::QueueService;
+use crate::rpc::NoxClient;
 
 pub struct Application {
     config: Config,

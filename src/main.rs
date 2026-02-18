@@ -10,8 +10,8 @@ mod config;
 mod crypto;
 mod events;
 mod handle_gateway;
-mod rpc;
 mod queue;
+mod rpc;
 mod utils;
 
 #[tokio::main]

@@ -17,13 +17,14 @@ pub struct NoxClient {
 }
 
 impl NoxClient {
-    pub async fn new(rpc_url: &str, contract_address: Address) -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn new(
+        rpc_url: &str,
+        contract_address: Address,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let trimmed_rpc_url = rpc_url.trim_end_matches('/');
         let provider = RootProvider::connect(trimmed_rpc_url).await?;
         let contract = NoxCompute::new(contract_address, provider);
-        Ok(Self {
-            contract
-        })
+        Ok(Self { contract })
     }
 
     /// Returns value of ETH call to kmsPublicKey.
