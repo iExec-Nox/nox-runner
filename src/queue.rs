@@ -7,8 +7,8 @@ use tracing::{error, info};
 
 use crate::crypto::CryptoService;
 use crate::events::{
-    ArithmeticOperation, BooleanOperation, EncryptionOperation, Operator, SelectOperation,
-    TransactionMessage,
+    ArithmeticOperation, BooleanOperation, BurnOperation, EncryptionOperation, MintOperation,
+    Operator, SelectOperation, TransactionMessage, TransferOperation,
 };
 use crate::handle_gateway::{GatewayClient, HandleEntry, TEEComputeResult};
 use crate::utils::to_hex_with_prefix;
@@ -18,6 +18,7 @@ use crate::{
         arithmetic::{Operator as ArithmeticOperator, compute, safe_compute},
         boolean::{Operator as BooleanOperator, compare, select},
         get_solidity_type_from_handle, get_solidity_type_size,
+        token::{burn, mint, transfer},
     },
     events::SafeArithmeticOperation,
 };
@@ -34,6 +35,15 @@ pub struct InputEntry {
 /// Struct to deal with all events of a message corresponding to a given transaction on-chain.
 ///
 /// Call modules and methods from [`super::compute`] to perform actual computations.
+///
+/// At the exception of the [`Self::encrypt_plaintext`] methods, all methods have the same following workflow:
+/// * Fetches operands from the Handle Gateway and decrypts them
+/// * Performs a computation on plaintext operands and produces plaintext results
+/// * Encrypts each plaintext result and associates it to its corresponding result handle in an [`HandleEntry`]
+/// * Collects all produced [`entries`](HandleEntry) and publishes them to the Handle Gateway
+///
+/// The [`Self::encrypt_plaintext`] method only differs because it does not fetch operands and starts at
+/// the third bullet point by directly encrypting the plaintext value.
 pub struct QueueService {
     crypto_svc: CryptoService,
     handle_gateway: GatewayClient,
@@ -47,10 +57,11 @@ impl QueueService {
         }
     }
 
-    /// Handle message representing a transaction received from NATS.
+    /// Handle message representing all events associated to a transaction received from NATS.
     ///
-    /// A valid message should represent confidential operations of a single transaction.
-    /// When all result handles have been collected, they are sent to handle gateway in a single batch.
+    /// A valid message represents all confidential operations of a single transaction.
+    /// When all result handles have been collected, they are sent to the Handle Gateway in a single operation
+    /// in order to preserve transaction integrity as on a blockchain network.
     pub async fn handle_message(
         &self,
         transaction_message: TransactionMessage,
@@ -122,6 +133,9 @@ impl QueueService {
                         .await?
                 }
                 Operator::Select(operation) => self.select(event.caller, operation).await?,
+                Operator::Transfer(operation) => self.transfer(event.caller, operation).await?,
+                Operator::Mint(operation) => self.mint(event.caller, operation).await?,
+                Operator::Burn(operation) => self.burn(event.caller, operation).await?,
             };
             for entry in event_result_entries {
                 tx_result_entries.push(entry);
@@ -141,7 +155,7 @@ impl QueueService {
         Ok(())
     }
 
-    /// Encrypt plaintext for storage in handle storage.
+    /// Encrypts plaintext for storage in handle storage.
     ///
     /// A data size cannot be bigger than 32 bytes at the moment.
     fn encrypt_plaintext(
@@ -168,7 +182,7 @@ impl QueueService {
     /// Performs a comparison between 2 handles representing a same numeric type and
     /// returns a new handle representing a boolean.
     ///
-    /// Comparisons are implemented in [`crate::compute::boolean::compare`]
+    /// Comparisons are implemented in [`compare`]
     async fn compare(
         &self,
         caller: Address,
@@ -191,7 +205,7 @@ impl QueueService {
 
     /// Performs an arithmetic computation.
     ///
-    /// Retrieves operands from handle gateway, decrypts them and returns a result hande.
+    /// Arithmetic operations are implemented in [`compute`].
     async fn compute(
         &self,
         caller: Address,
@@ -210,7 +224,7 @@ impl QueueService {
 
     /// Performs a safe arithmetic operation.
     ///
-    /// Retrieves operands from handle gateway, decrypts them and returns a result hande.
+    /// Safe arithmetic operations are implemented in [`safe_compute`].
     async fn safe_compute(
         &self,
         caller: Address,
@@ -236,6 +250,8 @@ impl QueueService {
     /// Returns one between 2 handles depending on a condition.
     ///
     /// This is equivalent to if { ... } else { ... } or a ternary operator.
+    ///
+    /// The operation is implemented in [`select`].
     async fn select(
         &self,
         caller: Address,
@@ -254,6 +270,123 @@ impl QueueService {
         .to_bytes();
         self.format_and_encrypt_result(operation.result, result)
             .map(|entry| vec![entry])
+    }
+
+    /// Confidential tokens transfer operation.
+    ///
+    /// Performs the equivalent of an ERC20 transfer on handles representing uint256 values.
+    ///
+    /// The operation is implemented in [`transfer`].
+    async fn transfer(
+        &self,
+        caller: Address,
+        operation: TransferOperation,
+    ) -> Result<Vec<HandleEntry>, String> {
+        let operand_handles = vec![
+            operation.balance_from,
+            operation.balance_to,
+            operation.amount,
+        ];
+        let result_handles = vec![
+            operation.success.clone(),
+            operation.new_balance_from.clone(),
+            operation.new_balance_to.clone(),
+        ];
+        let operands = self
+            .fetch_operands(caller, operand_handles, result_handles)
+            .await?;
+        let (success, new_balance_from, new_balance_to) = transfer(
+            operands[0].clone(),
+            operands[1].clone(),
+            operands[2].clone(),
+        )?;
+        Ok(vec![
+            self.format_and_encrypt_result(operation.success, success.to_bytes())?,
+            self.format_and_encrypt_result(
+                operation.new_balance_from,
+                new_balance_from.to_bytes(),
+            )?,
+            self.format_and_encrypt_result(operation.new_balance_to, new_balance_to.to_bytes())?,
+        ])
+    }
+
+    /// Confidential tokens mint operation.
+    ///
+    /// Performs the equivalent of an ERC20 mint on handles representing uint256 values.
+    ///
+    /// The operation is implemented in [`mint`].
+    async fn mint(
+        &self,
+        caller: Address,
+        operation: MintOperation,
+    ) -> Result<Vec<HandleEntry>, String> {
+        let operand_handles = vec![
+            operation.balance_to,
+            operation.amount,
+            operation.total_supply,
+        ];
+        let result_handles = vec![
+            operation.success.clone(),
+            operation.new_balance_to.clone(),
+            operation.new_total_supply.clone(),
+        ];
+        let operands = self
+            .fetch_operands(caller, operand_handles, result_handles)
+            .await?;
+        let (success, new_balance_to, new_total_supply) = mint(
+            operands[0].clone(),
+            operands[1].clone(),
+            operands[2].clone(),
+        )?;
+        Ok(vec![
+            self.format_and_encrypt_result(operation.success, success.to_bytes())?,
+            self.format_and_encrypt_result(operation.new_balance_to, new_balance_to.to_bytes())?,
+            self.format_and_encrypt_result(
+                operation.new_total_supply,
+                new_total_supply.to_bytes(),
+            )?,
+        ])
+    }
+
+    /// Confidential tokens burn operation.
+    ///
+    /// Performs the equivalent of an ERC20 burn on handles representing uint256 values.
+    ///
+    /// The operation is implemented in [`burn`].
+    async fn burn(
+        &self,
+        caller: Address,
+        operation: BurnOperation,
+    ) -> Result<Vec<HandleEntry>, String> {
+        let operand_handles = vec![
+            operation.balance_from,
+            operation.amount,
+            operation.total_supply,
+        ];
+        let result_handles = vec![
+            operation.success.clone(),
+            operation.new_balance_from.clone(),
+            operation.new_total_supply.clone(),
+        ];
+        let operands = self
+            .fetch_operands(caller, operand_handles, result_handles)
+            .await?;
+        let (success, new_balance_from, new_total_supply) = burn(
+            operands[0].clone(),
+            operands[1].clone(),
+            operands[2].clone(),
+        )?;
+        Ok(vec![
+            self.format_and_encrypt_result(operation.success, success.to_bytes())?,
+            self.format_and_encrypt_result(
+                operation.new_balance_from,
+                new_balance_from.to_bytes(),
+            )?,
+            self.format_and_encrypt_result(
+                operation.new_total_supply,
+                new_total_supply.to_bytes(),
+            )?,
+        ])
     }
 
     /// Fetches operands from the handle gateway for a required computation.

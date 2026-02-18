@@ -9,6 +9,7 @@ use tracing::error;
 
 pub mod arithmetic;
 pub mod boolean;
+pub mod token;
 
 /// Wraps around booleans and signed and unsigned integers provided by alloy-primitives.
 ///
