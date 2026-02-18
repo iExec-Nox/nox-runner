@@ -5,6 +5,7 @@ use crate::config::Config;
 use crate::crypto::CryptoService;
 use crate::events::TransactionMessage;
 use crate::handle_gateway::GatewayClient;
+use crate::rpc::NoxClient;
 use crate::queue::QueueService;
 
 pub struct Application {
@@ -14,8 +15,10 @@ pub struct Application {
 
 impl Application {
     pub async fn new(config: Config) -> Result<Self, Box<dyn std::error::Error>> {
+        let nox_rpc = NoxClient::new(&config.rpc_url, config.nox_compute_contract_address).await?;
+        let protocol_key_bytes = nox_rpc.get_kms_public_key().await?;
         let handle_gateway = GatewayClient::new(&config.handle_gateway_url).await?;
-        let crypto_svc = CryptoService::new(&config.kms_url).await?;
+        let crypto_svc = CryptoService::new(protocol_key_bytes).await?;
         let queue_svc = QueueService::new(crypto_svc, handle_gateway);
         Ok(Application { config, queue_svc })
     }

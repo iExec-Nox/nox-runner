@@ -2,6 +2,9 @@ FROM rust:1.92.0-alpine3.23 AS builder
 
 WORKDIR /app
 
+# Install build dependencies
+RUN apk add --no-cache openssl-dev=3.5.5-r0 openssl-libs-static=3.5.5-r0
+
 # Copy manifest and source files
 COPY . .
 
