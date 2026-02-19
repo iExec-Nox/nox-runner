@@ -16,6 +16,11 @@ pub struct Config {
 impl Config {
     pub fn load() -> Result<Self, ConfigError> {
         let config = ConfigBuilder::builder()
+            .set_default("rpc_url", "http://localhost:8545")?
+            .set_default(
+                "nox_compute_contract_address",
+                "0x0000000000000000000000000000000000000000",
+            )?
             .set_default("handle_gateway_url", "http://localhost:3000")?
             .set_default("nats_url", "nats://localhost:4222")?
             .set_default("nats_stream_name", "nox_ingestor")?
