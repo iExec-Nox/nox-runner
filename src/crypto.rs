@@ -14,13 +14,11 @@ use k256::{
         sec1::ToEncodedPoint,
     },
 };
-use reqwest::Client;
 use rsa::{Oaep, RsaPrivateKey, RsaPublicKey, pkcs8::EncodePublicKey};
-use serde::Deserialize;
 use sha2::Sha256;
-use tracing::debug;
+use tracing::info;
 
-use crate::utils::strip_0x_prefix;
+use crate::utils::to_hex_with_prefix;
 
 const ECIES_CONTEXT: &[u8] = b"ECIES:AES_GCM:v1";
 
@@ -30,12 +28,6 @@ pub struct EciesCiphertext {
     pub ciphertext: Vec<u8>,
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct KmsPublicKeyResponse {
-    public_key: String,
-}
-
 pub struct CryptoService {
     private: RsaPrivateKey,
     pub public: String,
@@ -43,22 +35,16 @@ pub struct CryptoService {
 }
 
 impl CryptoService {
-    pub async fn new(kms_url: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let client = Client::builder().build()?;
-        let base = kms_url.trim_end_matches('/');
-        let url = format!("{base}/v0/public-key");
-        debug!("Fetching KMS public key from {url}");
-
-        let response = client.get(&url).send().await?.error_for_status()?;
-
-        let hex_protocol_key = response.json::<KmsPublicKeyResponse>().await?.public_key;
-
-        let trimmed = strip_0x_prefix(&hex_protocol_key);
-        let bytes = hex::decode(trimmed)?;
-        let protocol_key = PublicKey::from_sec1_bytes(&bytes)?;
+    pub async fn new(protocol_key_bytes: Vec<u8>) -> Result<Self, Box<dyn std::error::Error>> {
+        let protocol_key = PublicKey::from_sec1_bytes(&protocol_key_bytes)?;
 
         let key = RsaPrivateKey::new(&mut OsRng, 2048)?;
         let rsa_public_key = RsaPublicKey::from(&key).to_public_key_der()?;
+
+        info!(
+            protocol_key = to_hex_with_prefix(&protocol_key_bytes),
+            "ECIES crypto service initialized"
+        );
 
         Ok(Self {
             private: key.clone(),
