@@ -6,14 +6,14 @@ use alloy_sol_types::sol;
 
 sol! {
     #[sol(rpc)]
-    interface NoxCompute {
+    interface INoxCompute {
         function kmsPublicKey() external view returns (bytes memory);
     }
 }
 
 /// Connection to a NoxCompute Smart Contract deployment.
 pub struct NoxClient {
-    contract: NoxCompute::NoxComputeInstance<RootProvider>,
+    contract: INoxCompute::INoxComputeInstance<RootProvider>,
 }
 
 impl NoxClient {
@@ -23,7 +23,7 @@ impl NoxClient {
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let trimmed_rpc_url = rpc_url.trim_end_matches('/');
         let provider = RootProvider::connect(trimmed_rpc_url).await?;
-        let contract = NoxCompute::new(contract_address, provider);
+        let contract = INoxCompute::new(contract_address, provider);
         Ok(Self { contract })
     }
 
