@@ -15,7 +15,6 @@ pub struct HandlesCache {
 /// Implements Zeroize trait to clean memory.
 impl Zeroize for HandlesCache {
     fn zeroize(&mut self) {
-        info!("zeroize");
         for value in self.inner.values_mut() {
             value.zeroize();
         }
@@ -26,7 +25,6 @@ impl Zeroize for HandlesCache {
 /// Forces memory cleanup before dropping values.
 impl Drop for HandlesCache {
     fn drop(&mut self) {
-        info!("drop");
         self.zeroize();
     }
 }
