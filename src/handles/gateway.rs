@@ -13,7 +13,7 @@ use crate::queue::InputEntry;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct TEEComputeRequest {
+struct NoxComputeRequest {
     caller: Address,
     rsa_public_key: String,
     operands: Vec<String>,
@@ -31,7 +31,7 @@ pub struct HandleEntry {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TEEComputeResult {
+pub struct NoxComputeResult {
     pub chain_id: u32,
     pub block_number: u64,
     pub caller: Address,
@@ -61,7 +61,7 @@ impl GatewayClient {
         results: Vec<String>,
     ) -> Result<Vec<InputEntry>, reqwest::Error> {
         let url = format!("{}/v0/compute/operands", self.url);
-        let request = TEEComputeRequest {
+        let request = NoxComputeRequest {
             caller,
             rsa_public_key,
             operands,
@@ -78,7 +78,7 @@ impl GatewayClient {
         Ok(data)
     }
 
-    pub async fn push_results(&self, data: TEEComputeResult) -> Result<(), reqwest::Error> {
+    pub async fn push_results(&self, data: NoxComputeResult) -> Result<(), reqwest::Error> {
         let url = format!("{}/v0/compute/results", self.url);
         let response = self.client.post(&url).json(&data).send().await?;
         if let Err(err) = response.error_for_status_ref() {

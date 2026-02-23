@@ -2,9 +2,8 @@ use futures_util::StreamExt;
 use tracing::{error, info};
 
 use crate::config::Config;
-use crate::crypto::CryptoService;
 use crate::events::TransactionMessage;
-use crate::handle_gateway::GatewayClient;
+use crate::handles::{crypto::CryptoService, gateway::GatewayClient};
 use crate::queue::QueueService;
 use crate::rpc::NoxClient;
 
@@ -26,7 +25,7 @@ impl Application {
     /// Connects to existing NATS stream to consume messages.
     ///
     /// Received messages are deserialized as messages representing transactions.
-    pub async fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let client = async_nats::connect(&self.config.nats_url).await?;
         let jetstream = async_nats::jetstream::new(client);
         let stream = jetstream.get_stream(&self.config.nats_stream_name).await?;
