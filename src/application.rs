@@ -72,6 +72,7 @@ impl Application {
                                 },
                                 Err(e) => error!(transaction_hash, "Compute FAIL {e}"),
                             }
+                            self.queue_svc.reset_cache();
                         },
                         Err(e) => error!("Failed to pull message {e}"),
                     }

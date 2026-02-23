@@ -62,6 +62,11 @@ impl QueueService {
         }
     }
 
+    /// Clears previous cache to free memory and allocate a new fresh empty cache.
+    pub fn reset_cache(&mut self) {
+        self.handles_cache = HandlesCache::new();
+    }
+
     /// Handle message representing all events associated to a transaction received from NATS.
     ///
     /// A valid message represents all confidential operations of a single transaction.
@@ -148,7 +153,6 @@ impl QueueService {
                 tx_result_entries.push(entry);
             }
         }
-        self.handles_cache.clear();
         let request = NoxComputeResult {
             chain_id: transaction_message.chain_id,
             block_number: transaction_message.block_number,
