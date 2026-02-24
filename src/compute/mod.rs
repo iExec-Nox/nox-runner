@@ -4,7 +4,7 @@
 //! to alloy-primitives associated types. This is the API which allows to perform
 //! computations on all supported types.
 
-use std::sync::atomic::{compiler_fence, Ordering};
+use std::sync::atomic::{Ordering, compiler_fence};
 
 use alloy_primitives::{Signed, Uint, hex};
 use tracing::error;
@@ -33,11 +33,11 @@ impl Zeroize for SolidityValue {
             SolidityValue::Uint16(v) => {
                 *v = Uint::<16, 1>::from_be_bytes([0u8; 2]);
                 compiler_fence(Ordering::SeqCst);
-            },
+            }
             SolidityValue::Uint256(v) => {
                 *v = Uint::<256, 4>::from_be_bytes([0u8; 32]);
                 compiler_fence(Ordering::SeqCst);
-            },
+            }
             SolidityValue::Int16(v) => {
                 *v = Signed::<16, 1>::from_be_bytes([0u8; 2]);
                 compiler_fence(Ordering::SeqCst);
@@ -45,7 +45,7 @@ impl Zeroize for SolidityValue {
             SolidityValue::Int256(v) => {
                 *v = Signed::<256, 4>::from_be_bytes([0u8; 32]);
                 compiler_fence(Ordering::SeqCst);
-            },
+            }
         }
     }
 }
