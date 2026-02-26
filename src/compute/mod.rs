@@ -54,11 +54,15 @@ impl Zeroize for SolidityValue {
 }
 
 impl SolidityValue {
-    /// Converts from 32 big-endian bytes to alloy-primitives type
+    /// Converts from 32 big-endian bytes to alloy-primitives type.
+    ///
+    /// The following casting rules are implemented:
+    /// * For booleans, when all 32 bytes from `value_bytes` are `0`, it returns `false`, `true` otherwise.
+    /// * For signed and unsigned integers, `value_bytes` are truncated depending on the target type size.
     pub fn from_bytes(type_byte: u8, value_bytes: [u8; 32]) -> Result<Self, String> {
         Ok(match type_byte {
             0_u8 => {
-                if value_bytes == [0_u8; 32] {
+                if value_bytes == [0u8; 32] {
                     SolidityValue::Boolean(false)
                 } else {
                     SolidityValue::Boolean(true)
