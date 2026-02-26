@@ -16,7 +16,10 @@ pub mod token;
 
 /// Wraps around booleans and signed and unsigned integers provided by alloy-primitives.
 ///
-/// Types are ordered following Solidity types encoding specification.
+/// Types are ordered following Nox protocol specification to represent and encode Solidity types.
+///
+/// For each supported Solidity type, the associated value is encoded following its
+/// [`formal specification`](https://docs.soliditylang.org/en/latest/abi-spec.html#formal-specification-of-the-encoding).
 #[derive(Clone, Debug, PartialEq)]
 pub enum SolidityValue {
     Boolean(bool),
@@ -51,14 +54,18 @@ impl Zeroize for SolidityValue {
 }
 
 impl SolidityValue {
-    /// Converts from 32 big-endian bytes to alloy-primitives type
+    /// Converts from 32 big-endian bytes to alloy-primitives type.
+    ///
+    /// The following casting rules are implemented:
+    /// * For booleans, when all 32 bytes from `value_bytes` are `0`, it returns `false`, `true` otherwise.
+    /// * For signed and unsigned integers, `value_bytes` are truncated depending on the target type size.
     pub fn from_bytes(type_byte: u8, value_bytes: [u8; 32]) -> Result<Self, String> {
         Ok(match type_byte {
             0_u8 => {
-                if value_bytes[31] == 1 {
-                    SolidityValue::Boolean(true)
-                } else {
+                if value_bytes == [0u8; 32] {
                     SolidityValue::Boolean(false)
+                } else {
+                    SolidityValue::Boolean(true)
                 }
             }
             5_u8 => SolidityValue::Uint16(Uint::<16, 1>::from_be_bytes::<2>(

@@ -1,6 +1,6 @@
 //! Handle a [`TransactionMessage`] received through NATS.
 
-use alloy_primitives::{Address, U256};
+use alloy_primitives::{Address, FixedBytes};
 use chrono::NaiveDateTime;
 use serde::Deserialize;
 use tracing::{error, info};
@@ -169,25 +169,18 @@ impl QueueService {
 
     /// Encrypts plaintext for storage in handle storage.
     ///
-    /// A data size cannot be bigger than 32 bytes at the moment.
+    /// A plaintext value is provided as bytes32 in the [`EncryptionOperation`] event.
+    /// See PlaintextToEncrypted event in [`INoxCompute`](https://github.com/iExec-Nox/nox-protocol-contracts/blob/main/contracts/interfaces/INoxCompute.sol) interface.
     fn encrypt_plaintext(
         &mut self,
         operation: EncryptionOperation,
     ) -> Result<Vec<HandleEntry>, String> {
-        let solidity_type_size = get_solidity_type_size(operation.tee_type)?;
-        let plaintext_bytes: U256 = operation
+        let value_bytes: FixedBytes<32> = operation
             .value
             .parse()
-            .map_err(|e| format!("Failed to parse input as uint256: {e}"))?;
-        if solidity_type_size < plaintext_bytes.byte_len() {
-            let message = format!(
-                "plaintext size {} exceeds TEE type size {solidity_type_size}",
-                plaintext_bytes.byte_len()
-            );
-            error!(message);
-            return Err(message);
-        }
-        self.format_and_encrypt_result(operation.handle, SolidityValue::Uint256(plaintext_bytes))
+            .map_err(|e| format!("Failed to parse input as bytes32: {e}"))?;
+        let value = SolidityValue::from_bytes(operation.tee_type, value_bytes.0)?;
+        self.format_and_encrypt_result(operation.handle, value)
             .map(|entry| vec![entry])
     }
 
