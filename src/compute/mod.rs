@@ -16,7 +16,10 @@ pub mod token;
 
 /// Wraps around booleans and signed and unsigned integers provided by alloy-primitives.
 ///
-/// Types are ordered following Solidity types encoding specification.
+/// Types are ordered following Nox protocol specification to represent and encode Solidity types.
+///
+/// For each supported Solidity type, the associated value is encoded following its
+/// [`formal specification`](https://docs.soliditylang.org/en/latest/abi-spec.html#formal-specification-of-the-encoding).
 #[derive(Clone, Debug, PartialEq)]
 pub enum SolidityValue {
     Boolean(bool),
@@ -55,10 +58,10 @@ impl SolidityValue {
     pub fn from_bytes(type_byte: u8, value_bytes: [u8; 32]) -> Result<Self, String> {
         Ok(match type_byte {
             0_u8 => {
-                if value_bytes[31] == 1 {
-                    SolidityValue::Boolean(true)
-                } else {
+                if value_bytes == [0_u8; 32] {
                     SolidityValue::Boolean(false)
+                } else {
+                    SolidityValue::Boolean(true)
                 }
             }
             5_u8 => SolidityValue::Uint16(Uint::<16, 1>::from_be_bytes::<2>(
