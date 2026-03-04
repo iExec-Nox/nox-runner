@@ -66,13 +66,7 @@ impl GatewayClient {
             operands,
             results,
         };
-        let response = self
-            .client
-            .get(&url)
-            .json(&request)
-            .send()
-            .await?
-            .error_for_status()?;
+        let response = self.client.get(&url).json(&request).send().await?;
         if let Err(err) = response.error_for_status_ref() {
             let status = response.status();
             let error_body = response.text().await?;
