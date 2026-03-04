@@ -4,7 +4,6 @@
 //! See [`super::crypto`] for ECIES related operations.
 
 use alloy_primitives::Address;
-use chrono::NaiveDateTime;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tracing::error;
@@ -26,7 +25,6 @@ pub struct HandleEntry {
     pub ciphertext: String,
     pub public_key: String,
     pub nonce: String,
-    pub created_at: NaiveDateTime,
 }
 
 #[derive(Serialize)]
@@ -53,6 +51,7 @@ impl GatewayClient {
         })
     }
 
+    /// Retrieves handles from the Handle Gateway.
     pub async fn get_handles(
         &self,
         caller: Address,
@@ -67,17 +66,18 @@ impl GatewayClient {
             operands,
             results,
         };
-        let response = self
-            .client
-            .get(&url)
-            .json(&request)
-            .send()
-            .await?
-            .error_for_status()?;
+        let response = self.client.get(&url).json(&request).send().await?;
+        if let Err(err) = response.error_for_status_ref() {
+            let status = response.status();
+            let error_body = response.text().await?;
+            error!("Error {status}: {error_body}");
+            return Err(err);
+        }
         let data = response.json::<Vec<InputEntry>>().await?;
         Ok(data)
     }
 
+    /// Push handles associated to a Nox computation to the Handle Gateway.
     pub async fn push_results(&self, data: NoxComputeResult) -> Result<(), reqwest::Error> {
         let url = format!("{}/v0/compute/results", self.url);
         let response = self.client.post(&url).json(&data).send().await?;

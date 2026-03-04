@@ -1,7 +1,6 @@
 //! Handle a [`TransactionMessage`] received through NATS.
 
 use alloy_primitives::{Address, FixedBytes};
-use chrono::NaiveDateTime;
 use serde::Deserialize;
 use tracing::{error, info};
 
@@ -450,7 +449,6 @@ impl QueueService {
             ciphertext: to_hex_with_prefix(&encrypted_result.ciphertext),
             public_key: to_hex_with_prefix(&encrypted_result.ephemeral_pubkey),
             nonce: to_hex_with_prefix(&encrypted_result.nonce),
-            created_at: NaiveDateTime::default(),
         };
         Ok(handle_entry)
     }
