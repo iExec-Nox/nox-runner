@@ -3,20 +3,60 @@
 //! All operands and results are encrypted with ECIES.
 //! See [`super::crypto`] for ECIES related operations.
 
-use alloy_primitives::Address;
-use reqwest::Client;
+use alloy_primitives::{Address, U256};
+use alloy_signer::SignerSync;
+use alloy_signer_local::PrivateKeySigner;
+use alloy_sol_types::{Eip712Domain, eip712_domain, sol};
+use base64::{Engine as _, engine::general_purpose::STANDARD};
+use reqwest::{Client, header};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
+use thiserror::Error;
 use tracing::error;
 
 use crate::queue::InputEntry;
 
+/// EIP-712 domain name for Handle Gateway interactions.
+const HANDLE_GATEWAY_EIP712_DOMAIN_NAME: &str = "Handle Gateway";
+
+#[derive(Debug, Error)]
+pub enum GatewayError {
+    #[error("Failed to communicate with Handle Gateway {0}")]
+    CommunicationError(#[from] reqwest::Error),
+    #[error("Failed to create AUTHORIZATION header")]
+    InvalidHeaderValue(#[from] reqwest::header::InvalidHeaderValue),
+    #[error(transparent)]
+    SignatureError(#[from] alloy_signer::Error),
+}
+
+sol! {
+    /// EIP-712 compatible payload to authorize a Runner to retrieve operands from the Handle Gateway.
+    #[derive(Serialize)]
+    struct OperandAccessAuthorization {
+        address caller;
+        string[] operands;
+        string rsaPublicKey;
+        string transactionHash;
+    }
+
+    /// EIP-712 compatible payload to authorize a Runner to publish results to the Handle Gateway.
+    #[derive(Serialize)]
+    struct ResultPublishingAuthorization {
+        uint256 chainId;
+        uint256 blockNumber;
+        address caller;
+        string transactionHash;
+    }
+}
+
+/// Full authorization data to retrieve compute operands from the Handle Gateway.
+///
+/// It contains the plain [`OperandAccessAuthorization`] EIP-712 data with its signed hash.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct NoxComputeRequest {
-    caller: Address,
-    rsa_public_key: String,
-    operands: Vec<String>,
-    results: Vec<String>,
+    payload: OperandAccessAuthorization,
+    signature: String,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -27,65 +67,138 @@ pub struct HandleEntry {
     pub nonce: String,
 }
 
+/// Full authorization data to publish compute results to the Handle Gateway.
+///
+/// It contains the plain [`ResultPublishingAuthorization`] EIP-712 data with its signed hash.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NoxComputeResult {
-    pub chain_id: u32,
-    pub block_number: u64,
-    pub caller: Address,
-    pub transaction_hash: String,
-    pub handles: Vec<HandleEntry>,
+    payload: ResultPublishingAuthorization,
+    signature: String,
 }
 
 pub struct GatewayClient {
     client: Client,
     url: String,
+    signer: PrivateKeySigner,
+    domain: Eip712Domain,
 }
 
 impl GatewayClient {
-    pub async fn new(url: &str) -> Result<Self, reqwest::Error> {
+    pub async fn new(
+        chain_id: u64,
+        url: &str,
+        signer: PrivateKeySigner,
+    ) -> Result<Self, reqwest::Error> {
         let client = Client::builder().build()?;
+        let domain = eip712_domain! {
+            name: HANDLE_GATEWAY_EIP712_DOMAIN_NAME,
+            version: "1",
+            chain_id: chain_id,
+        };
         Ok(Self {
             client,
             url: url.to_string(),
+            signer,
+            domain,
         })
     }
 
     /// Retrieves handles from the Handle Gateway.
+    ///
+    /// # Errors
+    ///
+    /// The operation will fail with:
+    /// - [`GatewayError::SignatureError`] if the authorization token payload cannot be signed.
+    /// - [`GatewayError::InvalidHeaderValue`] if the authorization header value cannot be created.
+    /// - [`GatewayError::CommunicationError`] on communication error with the Handle Gateway.
     pub async fn get_handles(
         &self,
         caller: Address,
+        transaction_hash: String,
         rsa_public_key: String,
         operands: Vec<String>,
-        results: Vec<String>,
-    ) -> Result<Vec<InputEntry>, reqwest::Error> {
+    ) -> Result<Vec<InputEntry>, GatewayError> {
         let url = format!("{}/v0/compute/operands", self.url);
-        let request = NoxComputeRequest {
+        let payload = OperandAccessAuthorization {
             caller,
-            rsa_public_key,
+            transactionHash: transaction_hash,
+            rsaPublicKey: rsa_public_key,
             operands,
-            results,
         };
-        let response = self.client.get(&url).json(&request).send().await?;
+        let signature = self
+            .signer
+            .sign_typed_data_sync(&payload, &self.domain)
+            .map_err(GatewayError::SignatureError)?
+            .to_string();
+        let auth = STANDARD.encode(json!(NoxComputeRequest { payload, signature }).to_string());
+        let mut auth_value = header::HeaderValue::from_str(&format!("EIP712 {auth}"))
+            .map_err(GatewayError::InvalidHeaderValue)?;
+        auth_value.set_sensitive(true);
+        let response = self
+            .client
+            .get(&url)
+            .header(header::AUTHORIZATION, auth_value)
+            .send()
+            .await
+            .map_err(GatewayError::CommunicationError)?;
         if let Err(err) = response.error_for_status_ref() {
             let status = response.status();
             let error_body = response.text().await?;
             error!("Error {status}: {error_body}");
-            return Err(err);
+            return Err(GatewayError::CommunicationError(err));
         }
-        let data = response.json::<Vec<InputEntry>>().await?;
-        Ok(data)
+        response
+            .json::<Vec<InputEntry>>()
+            .await
+            .map_err(GatewayError::CommunicationError)
     }
 
     /// Push handles associated to a Nox computation to the Handle Gateway.
-    pub async fn push_results(&self, data: NoxComputeResult) -> Result<(), reqwest::Error> {
+    ///
+    /// # Errors
+    ///
+    /// The operation will fail with:
+    /// - [`GatewayError::SignatureError`] if the authorization token payload cannot be signed.
+    /// - [`GatewayError::InvalidHeaderValue`] if the authorization header value cannot be created.
+    /// - [`GatewayError::CommunicationError`] on communication error with the Handle Gateway.
+    pub async fn push_results(
+        &self,
+        chain_id: u32,
+        block_number: u64,
+        caller: Address,
+        transaction_hash: String,
+        handles: Vec<HandleEntry>,
+    ) -> Result<(), GatewayError> {
         let url = format!("{}/v0/compute/results", self.url);
-        let response = self.client.post(&url).json(&data).send().await?;
+        let payload = ResultPublishingAuthorization {
+            chainId: U256::from(chain_id),
+            blockNumber: U256::from(block_number),
+            caller,
+            transactionHash: transaction_hash,
+        };
+        let signature = self
+            .signer
+            .sign_typed_data_sync(&payload, &self.domain)
+            .map_err(GatewayError::SignatureError)?
+            .to_string();
+        let auth = STANDARD.encode(json!(NoxComputeResult { payload, signature }).to_string());
+        let mut auth_value = header::HeaderValue::from_str(&format!("EIP712 {auth}"))
+            .map_err(GatewayError::InvalidHeaderValue)?;
+        auth_value.set_sensitive(true);
+        let response = self
+            .client
+            .post(&url)
+            .header(header::AUTHORIZATION, auth_value)
+            .json(&handles)
+            .send()
+            .await
+            .map_err(GatewayError::CommunicationError)?;
         if let Err(err) = response.error_for_status_ref() {
             let status = response.status();
             let error_body = response.text().await?;
             error!("Error {status}: {error_body}");
-            return Err(err);
+            return Err(GatewayError::CommunicationError(err));
         }
         Ok(())
     }

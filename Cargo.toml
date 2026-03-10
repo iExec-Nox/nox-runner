@@ -8,8 +8,11 @@ aes-gcm = "0.10.3"
 alloy-contract = "1.7.0"
 alloy-primitives = { version = "1.5.4", features = ["serde"] }
 alloy-provider = "1.7.0"
+alloy-signer = { version = "1.7.3", features = ["eip712"] }
+alloy-signer-local = "1.7.3"
 alloy-sol-types = "1.5.6"
 async-nats = "0.46.0"
+base64 = "0.22.1"
 chrono = { version = "0.4.43", features = ["serde"] }
 config = "0.15.19"
 futures = "0.3.31"
@@ -21,6 +24,7 @@ rsa = "0.9.10"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 sha2 = "0.10.9"
+thiserror = "2.0.18"
 tokio = { version = "1.49.0", features = ["macros", "rt-multi-thread", "signal"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }

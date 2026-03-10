@@ -4,6 +4,7 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct Config {
+    pub chain_id: u64,
     pub rpc_url: String,
     pub nox_compute_contract_address: Address,
     pub handle_gateway_url: String,
@@ -11,6 +12,7 @@ pub struct Config {
     pub nats_stream_name: String,
     pub nats_consumer_name: String,
     pub nats_consumer_max_deliver: i64,
+    pub wallet_key: String,
 }
 
 impl Config {
