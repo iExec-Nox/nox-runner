@@ -16,6 +16,9 @@ use tracing::error;
 
 use crate::queue::InputEntry;
 
+/// EIP-712 domain name for Handle Gateway interactions.
+const HANDLE_GATEWAY_EIP712_DOMAIN_NAME: &str = "Handle Gateway";
+
 #[derive(Debug, Error)]
 pub enum GatewayError {
     #[error("Failed to communicate with Handle Gateway {0}")]
@@ -27,6 +30,7 @@ pub enum GatewayError {
 }
 
 sol! {
+    /// EIP-712 compatible payload to authorize a Runner to retrieve operands from the Handle Gateway.
     #[derive(Serialize)]
     #[serde(rename_all = "camelCase")]
     struct OperandAccessAuthorization {
@@ -36,6 +40,7 @@ sol! {
         string transaction_hash;
     }
 
+    /// EIP-712 compatible payload to authorize a Runner to publish results to the Handle Gateway.
     #[derive(Serialize)]
     #[serde(rename_all = "camelCase")]
     struct ResultPublishingAuthorization {
@@ -46,6 +51,9 @@ sol! {
     }
 }
 
+/// Full authorization data to retrieve compute operands from the Handle Gateway.
+///
+/// It contains the plain [`OperandAccessAuthorization`] EIP-712 data with its signed hash.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct NoxComputeRequest {
@@ -61,6 +69,9 @@ pub struct HandleEntry {
     pub nonce: String,
 }
 
+/// Full authorization data to publish compute results to the Handle Gateway.
+///
+/// It contains the plain [`ResultPublishingAuthorization`] EIP-712 data with its signed hash.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NoxComputeResult {
@@ -83,7 +94,7 @@ impl GatewayClient {
     ) -> Result<Self, reqwest::Error> {
         let client = Client::builder().build()?;
         let domain = eip712_domain! {
-            name: "Handle Gateway",
+            name: HANDLE_GATEWAY_EIP712_DOMAIN_NAME,
             version: "1",
             chain_id: chain_id,
         };
@@ -96,6 +107,13 @@ impl GatewayClient {
     }
 
     /// Retrieves handles from the Handle Gateway.
+    ///
+    /// # Errors
+    ///
+    /// The operation will fail with:
+    /// - [`GatewayError::SignatureError`] if the authorization token payload cannot be signed.
+    /// - [`GatewayError::InvalidHeaderValue`] if the authorization header value cannot be created.
+    /// - [`GatewayError::CommunicationError`] on communication error with the Handle Gateway.
     pub async fn get_handles(
         &self,
         caller: Address,
@@ -139,6 +157,13 @@ impl GatewayClient {
     }
 
     /// Push handles associated to a Nox computation to the Handle Gateway.
+    ///
+    /// # Errors
+    ///
+    /// The operation will fail with:
+    /// - [`GatewayError::SignatureError`] if the authorization token payload cannot be signed.
+    /// - [`GatewayError::InvalidHeaderValue`] if the authorization header value cannot be created.
+    /// - [`GatewayError::CommunicationError`] on communication error with the Handle Gateway.
     pub async fn push_results(
         &self,
         chain_id: u32,
