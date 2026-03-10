@@ -32,22 +32,20 @@ pub enum GatewayError {
 sol! {
     /// EIP-712 compatible payload to authorize a Runner to retrieve operands from the Handle Gateway.
     #[derive(Serialize)]
-    #[serde(rename_all = "camelCase")]
     struct OperandAccessAuthorization {
         address caller;
         string[] operands;
-        string rsa_public_key;
-        string transaction_hash;
+        string rsaPublicKey;
+        string transactionHash;
     }
 
     /// EIP-712 compatible payload to authorize a Runner to publish results to the Handle Gateway.
     #[derive(Serialize)]
-    #[serde(rename_all = "camelCase")]
     struct ResultPublishingAuthorization {
-        uint256 chain_id;
-        uint256 block_number;
+        uint256 chainId;
+        uint256 blockNumber;
         address caller;
-        string transaction_hash;
+        string transactionHash;
     }
 }
 
@@ -124,8 +122,8 @@ impl GatewayClient {
         let url = format!("{}/v0/compute/operands", self.url);
         let payload = OperandAccessAuthorization {
             caller,
-            transaction_hash,
-            rsa_public_key,
+            transactionHash: transaction_hash,
+            rsaPublicKey: rsa_public_key,
             operands,
         };
         let signature = self
@@ -174,10 +172,10 @@ impl GatewayClient {
     ) -> Result<(), GatewayError> {
         let url = format!("{}/v0/compute/results", self.url);
         let payload = ResultPublishingAuthorization {
-            chain_id: U256::from(chain_id),
-            block_number: U256::from(block_number),
+            chainId: U256::from(chain_id),
+            blockNumber: U256::from(block_number),
             caller,
-            transaction_hash,
+            transactionHash: transaction_hash,
         };
         let signature = self
             .signer
