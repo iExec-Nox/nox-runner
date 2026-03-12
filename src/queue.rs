@@ -1,18 +1,14 @@
 //! Handle a [`TransactionMessage`] received through NATS.
 
-use alloy_primitives::{Address, FixedBytes};
-use serde::Deserialize;
+use alloy_primitives::{Address, FixedBytes, hex, utils::Keccak256};
+use serde::{Deserialize, Serialize};
 use tracing::{error, info};
 
 use crate::events::{
     ArithmeticOperation, BooleanOperation, BurnOperation, EncryptionOperation, MintOperation,
     Operator, SelectOperation, TransactionMessage, TransferOperation,
 };
-use crate::handles::{
-    cache::HandlesCache,
-    crypto::CryptoService,
-    gateway::{GatewayClient, HandleEntry},
-};
+use crate::handles::{cache::HandlesCache, crypto::CryptoService, gateway::GatewayClient};
 use crate::utils::to_hex_with_prefix;
 use crate::{
     compute::{
@@ -25,13 +21,25 @@ use crate::{
     events::SafeArithmeticOperation,
 };
 
+/// Handles operands fetched from the Handle Gateway for an event computation.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct InputEntry {
-    handle: String,
+pub struct OperandEntry {
+    pub handle: String,
     pub ciphertext: String,
     pub encrypted_shared_secret: String,
     pub iv: String,
+}
+
+/// Handles results sent to the Handle Gateway when publishing results.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResultEntry {
+    pub handle: String,
+    pub handle_value_tag: String,
+    pub ciphertext: String,
+    pub public_key: String,
+    pub nonce: String,
 }
 
 /// Struct to deal with all events of a message corresponding to a given transaction on-chain.
@@ -41,8 +49,8 @@ pub struct InputEntry {
 /// At the exception of the [`Self::encrypt_plaintext`] methods, all methods have the same following workflow:
 /// * Fetches operands from the Handle Gateway and decrypts them
 /// * Performs a computation on plaintext operands and produces plaintext results
-/// * Encrypts each plaintext result and associates it to its corresponding result handle in an [`HandleEntry`]
-/// * Collects all produced [`entries`](HandleEntry) and publishes them to the Handle Gateway
+/// * Encrypts each plaintext result and associates it to its corresponding result handle in an [`ResultEntry`]
+/// * Collects all produced [`entries`](ResultEntry) and publishes them to the Handle Gateway
 ///
 /// The [`Self::encrypt_plaintext`] method only differs because it does not fetch operands and starts at
 /// the third bullet point by directly encrypting the plaintext value.
@@ -253,7 +261,7 @@ impl QueueService {
     fn encrypt_plaintext(
         &mut self,
         operation: EncryptionOperation,
-    ) -> Result<Vec<HandleEntry>, String> {
+    ) -> Result<Vec<ResultEntry>, String> {
         let value_bytes: FixedBytes<32> = operation
             .value
             .parse()
@@ -273,7 +281,7 @@ impl QueueService {
         transaction_hash: String,
         operator: BooleanOperator,
         operation: BooleanOperation,
-    ) -> Result<Vec<HandleEntry>, String> {
+    ) -> Result<Vec<ResultEntry>, String> {
         let operand_handles = vec![operation.left_hand_operand, operation.right_hand_operand];
         let operands = self
             .fetch_operands(caller, transaction_hash, operand_handles)
@@ -292,7 +300,7 @@ impl QueueService {
         transaction_hash: String,
         operator: ArithmeticOperator,
         operation: ArithmeticOperation,
-    ) -> Result<Vec<HandleEntry>, String> {
+    ) -> Result<Vec<ResultEntry>, String> {
         let operand_handles = vec![operation.left_hand_operand, operation.right_hand_operand];
         let operands = self
             .fetch_operands(caller, transaction_hash, operand_handles)
@@ -311,7 +319,7 @@ impl QueueService {
         transaction_hash: String,
         operator: ArithmeticOperator,
         operation: SafeArithmeticOperation,
-    ) -> Result<Vec<HandleEntry>, String> {
+    ) -> Result<Vec<ResultEntry>, String> {
         let operand_handles = vec![operation.left_hand_operand, operation.right_hand_operand];
         let operands = self
             .fetch_operands(caller, transaction_hash, operand_handles)
@@ -333,7 +341,7 @@ impl QueueService {
         caller: Address,
         transaction_hash: String,
         operation: SelectOperation,
-    ) -> Result<Vec<HandleEntry>, String> {
+    ) -> Result<Vec<ResultEntry>, String> {
         let operand_handles = vec![operation.condition, operation.if_true, operation.if_false];
         let operands = self
             .fetch_operands(caller, transaction_hash, operand_handles)
@@ -357,7 +365,7 @@ impl QueueService {
         caller: Address,
         transaction_hash: String,
         operation: TransferOperation,
-    ) -> Result<Vec<HandleEntry>, String> {
+    ) -> Result<Vec<ResultEntry>, String> {
         let operand_handles = vec![
             operation.balance_from,
             operation.balance_to,
@@ -388,7 +396,7 @@ impl QueueService {
         caller: Address,
         transaction_hash: String,
         operation: MintOperation,
-    ) -> Result<Vec<HandleEntry>, String> {
+    ) -> Result<Vec<ResultEntry>, String> {
         let operand_handles = vec![
             operation.balance_to,
             operation.amount,
@@ -419,7 +427,7 @@ impl QueueService {
         caller: Address,
         transaction_hash: String,
         operation: BurnOperation,
-    ) -> Result<Vec<HandleEntry>, String> {
+    ) -> Result<Vec<ResultEntry>, String> {
         let operand_handles = vec![
             operation.balance_from,
             operation.amount,
@@ -485,7 +493,7 @@ impl QueueService {
     }
 
     /// Decrypts and converts an operand to its alloy-primitives type.
-    fn decrypt_and_format_operand(&self, entry: &InputEntry) -> Result<SolidityValue, String> {
+    fn decrypt_and_format_operand(&self, entry: &OperandEntry) -> Result<SolidityValue, String> {
         info!(handle = entry.handle, "decrypting operand");
         let data_bytes = self.crypto_svc.ecies_decrypt(
             &entry.ciphertext,
@@ -506,16 +514,25 @@ impl QueueService {
         &mut self,
         handle: String,
         value: SolidityValue,
-    ) -> Result<HandleEntry, String> {
+    ) -> Result<ResultEntry, String> {
         let solidity_type = get_solidity_type_from_handle(&handle)?;
         let solidity_type_size = get_solidity_type_size(solidity_type)?;
-        let result = value.to_bytes();
+        let result_bytes = value.to_bytes();
+
+        let handle_bytes =
+            hex::decode(&handle).map_err(|e| format!("Failed to decode {handle} to bytes: {e}"))?;
+        let mut hasher = Keccak256::new();
+        hasher.update(&handle_bytes);
+        hasher.update(result_bytes);
+        let handle_value_tag_bytes = hasher.finalize();
+
         self.handles_cache.add_handle(&handle, value);
         let encrypted_result = self
             .crypto_svc
-            .ecies_encrypt(&result[(32 - solidity_type_size)..32])?;
-        let handle_entry = HandleEntry {
+            .ecies_encrypt(&result_bytes[(32 - solidity_type_size)..32])?;
+        let handle_entry = ResultEntry {
             handle,
+            handle_value_tag: hex::encode_prefixed(handle_value_tag_bytes),
             ciphertext: to_hex_with_prefix(&encrypted_result.ciphertext),
             public_key: to_hex_with_prefix(&encrypted_result.ephemeral_pubkey),
             nonce: to_hex_with_prefix(&encrypted_result.nonce),

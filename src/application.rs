@@ -18,12 +18,20 @@ impl Application {
     pub async fn new(config: Config) -> Result<Self, Box<dyn std::error::Error>> {
         let nox_rpc = NoxClient::new(&config.rpc_url, config.nox_compute_contract_address).await?;
         let protocol_key_bytes = nox_rpc.get_kms_public_key().await?;
+        let handle_gateway_signer_address = nox_rpc.get_gateway_address().await?;
+        info!("Handle Gateway signer address: {handle_gateway_signer_address}");
+
         let crypto_svc = CryptoService::new(protocol_key_bytes).await?;
         let mut wallet_key_bytes = [0u8; 32];
         wallet_key_bytes.copy_from_slice(&hex::decode(&config.wallet_key)?);
         let signer = PrivateKeySigner::from_bytes(&wallet_key_bytes.into())?;
-        let handle_gateway =
-            GatewayClient::new(config.chain_id, &config.handle_gateway_url, signer).await?;
+        let handle_gateway = GatewayClient::new(
+            config.chain_id,
+            &config.handle_gateway_url,
+            handle_gateway_signer_address,
+            signer,
+        )
+        .await?;
         let queue_svc = QueueService::new(crypto_svc, handle_gateway);
         Ok(Application { config, queue_svc })
     }
