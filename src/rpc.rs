@@ -8,6 +8,7 @@ use tracing::error;
 sol! {
     #[sol(rpc)]
     interface INoxCompute {
+        function gateway() external view returns (address);
         function kmsPublicKey() external view returns (bytes memory);
     }
 }
@@ -29,7 +30,26 @@ impl NoxClient {
         Ok(Self { contract })
     }
 
-    /// Returns value of ETH call to kmsPublicKey.
+    /// Returns value of ETH call to gateway().
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Err`] in case of transport error or zero value.
+    pub async fn get_gateway_address(&self) -> Result<Address, String> {
+        let gateway_address = self
+            .contract
+            .gateway()
+            .call()
+            .await
+            .map_err(|e| format!("Call to gateway() failed: {e}"))
+            .inspect_err(|e| error!(e))?;
+        if gateway_address == Address::ZERO {
+            return Err(format!("Call to gateway() returned {}", Address::ZERO));
+        }
+        Ok(gateway_address)
+    }
+
+    /// Returns value of ETH call to kmsPublicKey().
     ///
     /// # Errors
     ///
@@ -40,7 +60,7 @@ impl NoxClient {
             .kmsPublicKey()
             .call()
             .await
-            .map_err(|e| format!("Call to kmsPublicKey failed: {e}"))
+            .map_err(|e| format!("Call to kmsPublicKey() failed: {e}"))
             .inspect_err(|e| error!("{e}"))?;
         Ok(protocol_key_bytes.to_vec())
     }
