@@ -99,6 +99,7 @@ struct ComputeOperandRequest {
 ///
 /// It contains the plain [`OperandAccessAuthorization`] EIP-712 data with its signed hash.
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ComputeOperandResponse {
     payload: ComputeOperands,
     signature: String,
