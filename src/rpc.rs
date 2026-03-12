@@ -42,7 +42,7 @@ impl NoxClient {
             .call()
             .await
             .map_err(|e| format!("Call to gateway() failed: {e}"))
-            .inspect_err(|e| error!(e))?;
+            .inspect_err(|e| error!("{e}"))?;
         if gateway_address == Address::ZERO {
             return Err(format!("Call to gateway() returned {}", Address::ZERO));
         }

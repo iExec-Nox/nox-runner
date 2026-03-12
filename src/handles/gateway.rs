@@ -97,7 +97,7 @@ struct ComputeOperandRequest {
 
 /// Operands retrieved from the Handle Gateway.
 ///
-/// It contains the plain [`OperandAccessAuthorization`] EIP-712 data with its signed hash.
+/// It contains the plain [`ComputeOperands`] EIP-712 data with its signed hash.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ComputeOperandResponse {
