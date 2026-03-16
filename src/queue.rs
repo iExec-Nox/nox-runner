@@ -96,6 +96,7 @@ impl QueueService {
             );
             let event_result_entries = match event.operator {
                 Operator::PlaintextToEncrypted(operation) => self.encrypt_plaintext(operation)?,
+                Operator::WrapPublicHandle(operation) => self.encrypt_plaintext(operation)?,
                 Operator::Add(operation) => {
                     self.compute(
                         event.caller,
