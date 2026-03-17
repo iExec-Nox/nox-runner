@@ -1,8 +1,11 @@
 //! Axum server handlers for health checks and metrics.
 
-use axum::{Json, http::Uri, response::IntoResponse};
+use axum::{
+    Json,
+    http::{StatusCode, Uri},
+    response::IntoResponse,
+};
 use chrono::Utc;
-use reqwest::StatusCode;
 use serde_json::{Value, json};
 
 /// Health check endpoint handler.

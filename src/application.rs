@@ -64,11 +64,7 @@ impl Application {
         let binding_address = self.config.binding_address();
         info!("starting TCP server listening on {binding_address}");
         let listener = tokio::net::TcpListener::bind(binding_address).await?;
-        tokio::spawn(async move {
-            axum::serve(listener, app)
-                .with_graceful_shutdown(shutdown_signal())
-                .await
-        });
+        tokio::spawn(async move { axum::serve(listener, app).await });
 
         info!("entering main loop to receive messages from NATS JetStream");
         loop {

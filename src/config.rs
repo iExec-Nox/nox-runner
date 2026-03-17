@@ -1,7 +1,6 @@
 use alloy_primitives::Address;
 use config::{Config as ConfigBuilder, ConfigError, Environment};
 use serde::Deserialize;
-use tracing::debug;
 
 #[derive(Deserialize)]
 pub struct ServerConfig {
@@ -49,8 +48,6 @@ impl Config {
 
     /// Returns the `host:port` string used to bind the HTTP listener.
     pub fn binding_address(&self) -> String {
-        let addr = format!("{}:{}", self.server.host, self.server.port);
-        debug!("Binding address: {}", addr);
-        addr
+        format!("{}:{}", self.server.host, self.server.port)
     }
 }
