@@ -58,6 +58,7 @@ impl Application {
         let mut subscriber = consumer.messages().await?;
 
         let app = Router::new()
+            .route("/", get(handlers::root))
             .route("/health", get(handlers::health_check))
             .fallback(handlers::not_found);
         let binding_address = self.config.binding_address();

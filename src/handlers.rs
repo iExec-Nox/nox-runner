@@ -1,6 +1,7 @@
 //! Axum server handlers for health checks and metrics.
 
 use axum::{Json, http::Uri, response::IntoResponse};
+use chrono::Utc;
 use reqwest::StatusCode;
 use serde_json::{Value, json};
 
@@ -25,4 +26,12 @@ pub async fn not_found(uri: Uri) -> impl IntoResponse {
         StatusCode::NOT_FOUND,
         Json(json!({ "error":format!("Route not found {}", uri.path()) })),
     )
+}
+
+/// `GET /` — returns service name and current UTC timestamp.
+pub async fn root() -> Json<Value> {
+    Json(json!({
+        "service": "Runner",
+        "timestamp": Utc::now().to_rfc3339()
+    }))
 }
