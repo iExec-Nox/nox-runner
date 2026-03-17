@@ -3,7 +3,14 @@ use config::{Config as ConfigBuilder, ConfigError, Environment};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
+pub struct ServerConfig {
+    pub host: String,
+    pub port: u16,
+}
+
+#[derive(Deserialize)]
 pub struct Config {
+    pub server: ServerConfig,
     pub chain_id: u64,
     pub rpc_url: String,
     pub nox_compute_contract_address: Address,
@@ -18,6 +25,8 @@ pub struct Config {
 impl Config {
     pub fn load() -> Result<Self, ConfigError> {
         let config = ConfigBuilder::builder()
+            .set_default("server.host", "127.0.0.1")?
+            .set_default("server.port", "8080")?
             .set_default("rpc_url", "http://localhost:8545")?
             .set_default(
                 "nox_compute_contract_address",
@@ -35,5 +44,10 @@ impl Config {
             )
             .build()?;
         config.try_deserialize()
+    }
+
+    /// Returns the `host:port` string used to bind the HTTP listener.
+    pub fn binding_address(&self) -> String {
+        format!("{}:{}", self.server.host, self.server.port)
     }
 }

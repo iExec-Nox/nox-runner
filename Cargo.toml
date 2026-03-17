@@ -12,6 +12,7 @@ alloy-signer = { version = "1.7.3", features = ["eip712"] }
 alloy-signer-local = "1.7.3"
 alloy-sol-types = "1.5.6"
 async-nats = "0.46.0"
+axum = "0.8.8"
 base64 = "0.22.1"
 chrono = { version = "0.4.43", features = ["serde"] }
 config = "0.15.19"
