@@ -1,10 +1,12 @@
 use alloy_primitives::hex;
 use alloy_signer_local::PrivateKeySigner;
+use axum::{Router, routing::get};
 use futures_util::StreamExt;
 use tracing::{error, info};
 
 use crate::config::Config;
 use crate::events::TransactionMessage;
+use crate::handlers;
 use crate::handles::{crypto::CryptoService, gateway::GatewayClient};
 use crate::queue::QueueService;
 use crate::rpc::NoxClient;
@@ -55,6 +57,19 @@ impl Application {
             .await?;
         let mut subscriber = consumer.messages().await?;
 
+        let app = Router::new()
+            .route("/health", get(handlers::health_check))
+            .fallback(handlers::not_found);
+        let binding_address = self.config.binding_address();
+        info!("starting TCP server listening on {binding_address}");
+        let listener = tokio::net::TcpListener::bind(binding_address).await?;
+        tokio::spawn(async move {
+            axum::serve(listener, app)
+                .with_graceful_shutdown(shutdown_signal())
+                .await
+        });
+
+        info!("entering main loop to receive messages from NATS JetStream");
         loop {
             tokio::select! {
                 _ = shutdown_signal() => {

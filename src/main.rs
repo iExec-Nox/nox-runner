@@ -8,6 +8,7 @@ mod application;
 mod compute;
 mod config;
 mod events;
+mod handlers;
 mod handles;
 mod queue;
 mod rpc;

@@ -1,0 +1,28 @@
+//! Axum server handlers for health checks and metrics.
+
+use axum::{Json, http::Uri, response::IntoResponse};
+use reqwest::StatusCode;
+use serde_json::{Value, json};
+
+/// Health check endpoint handler.
+///
+/// Returns a simple "OK" response to indicate that the service is running.
+/// This endpoint is typically used for health checks and service monitoring.
+///
+/// # Returns
+///
+/// JSON response containing:
+/// - `status`: The status of the service ("ok")
+pub async fn health_check() -> Json<Value> {
+    Json(json!({ "status": "ok" }))
+}
+
+/// Fallback handler for non-existing routes.
+///
+/// Returns 404 NOT_FOUND to indicate the requested route does not exist.
+pub async fn not_found(uri: Uri) -> impl IntoResponse {
+    (
+        StatusCode::NOT_FOUND,
+        Json(json!({ "error":format!("Route not found {}", uri.path()) })),
+    )
+}
