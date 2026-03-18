@@ -14,7 +14,7 @@ pub mod arithmetic;
 pub mod boolean;
 pub mod token;
 
-const HANDLE_VERSION_BYTE: usize = 5;
+const HANDLE_TYPE_BYTE: usize = 5;
 
 /// Wraps around booleans and signed and unsigned integers provided by alloy-primitives.
 ///
@@ -107,7 +107,7 @@ impl SolidityValue {
 /// Extracts solidity type from handle hex value
 pub fn get_solidity_type_from_handle(handle: &str) -> Result<u8, String> {
     match hex::decode(handle) {
-        Ok(v) => Ok(v[HANDLE_VERSION_BYTE]),
+        Ok(v) => Ok(v[HANDLE_TYPE_BYTE]),
         Err(e) => Err(format!("Failed to decode handle hex value {e}")),
     }
 }
