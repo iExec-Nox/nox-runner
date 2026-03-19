@@ -243,7 +243,7 @@ impl GatewayClient {
             chainId: U256::from(chain_id),
             blockNumber: U256::from(block_number),
             caller,
-            transactionHash: transaction_hash,
+            transactionHash: transaction_hash.clone(),
         };
         let signature = self
             .signer
@@ -278,7 +278,7 @@ impl GatewayClient {
             &hash,
             &authorization.signature,
         )?;
-        info!(authorization.payload.message);
+        info!(message = authorization.payload.message, transaction_hash);
         Ok(())
     }
 
