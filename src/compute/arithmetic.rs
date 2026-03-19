@@ -57,16 +57,32 @@ pub fn compute(
             Ok(SolidityValue::Int256(a.wrapping_mul(b)))
         }
         (Operator::Div, SolidityValue::Uint16(a), SolidityValue::Uint16(b)) => {
-            Ok(SolidityValue::Uint16(a / b))
+            if b != Uint::<16, 1>::ZERO {
+                Ok(SolidityValue::Uint16(a / b))
+            } else {
+                Ok(SolidityValue::Uint16(Uint::<16, 1>::MAX))
+            }
         }
         (Operator::Div, SolidityValue::Uint256(a), SolidityValue::Uint256(b)) => {
-            Ok(SolidityValue::Uint256(a / b))
+            if b != Uint::<256, 4>::ZERO {
+                Ok(SolidityValue::Uint256(a / b))
+            } else {
+                Ok(SolidityValue::Uint256(Uint::<256, 4>::MAX))
+            }
         }
         (Operator::Div, SolidityValue::Int16(a), SolidityValue::Int16(b)) => {
-            Ok(SolidityValue::Int16(a / b))
+            if b != Signed::<16, 1>::ZERO {
+                Ok(SolidityValue::Int16(a / b))
+            } else {
+                Ok(SolidityValue::Int16(Signed::<16, 1>::MAX))
+            }
         }
         (Operator::Div, SolidityValue::Int256(a), SolidityValue::Int256(b)) => {
-            Ok(SolidityValue::Int256(a / b))
+            if b != Signed::<256, 4>::ZERO {
+                Ok(SolidityValue::Int256(a / b))
+            } else {
+                Ok(SolidityValue::Int256(Signed::<256, 4>::MAX))
+            }
         }
         _ => Err("Unsupported operation".to_string()),
     }
