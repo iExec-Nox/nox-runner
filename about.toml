@@ -1,0 +1,15 @@
+accepted = [
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "MIT",
+    "OpenSSL",
+    "Unicode-3.0",
+    "Zlib"
+]
+
+["nox-runner"]
+accepted = [
+    "BUSL-1.1"
+]
