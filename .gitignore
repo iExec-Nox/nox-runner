@@ -24,3 +24,6 @@ target
 # Added by cargo
 
 /target
+
+# Cargo about.html, for now we don't publish / maintain it, but mainly check unexpected licenses
+about.html
