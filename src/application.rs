@@ -1,6 +1,7 @@
 use alloy_primitives::hex;
 use alloy_signer_local::PrivateKeySigner;
 use axum::{Router, routing::get};
+use axum_prometheus::{Handle, MakeDefaultHandle, PrometheusMetricLayerBuilder};
 use futures_util::StreamExt;
 use tracing::{error, info};
 
@@ -57,10 +58,18 @@ impl Application {
             .await?;
         let mut subscriber = consumer.messages().await?;
 
+        let prometheus_layer = PrometheusMetricLayerBuilder::new()
+            .with_allow_patterns(&["/", "/health", "/metrics"])
+            .build();
+        let metrics_handle = Handle::make_default_handle(Handle::default());
+
         let app = Router::new()
             .route("/", get(handlers::root))
             .route("/health", get(handlers::health_check))
-            .fallback(handlers::not_found);
+            .route("/metrics", get(handlers::metrics))
+            .fallback(handlers::not_found)
+            .layer(prometheus_layer)
+            .with_state(metrics_handle);
         let binding_address = self.config.binding_address();
         info!("starting TCP server listening on {binding_address}");
         let listener = tokio::net::TcpListener::bind(binding_address).await?;
