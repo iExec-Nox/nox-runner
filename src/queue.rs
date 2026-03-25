@@ -9,7 +9,6 @@ use crate::events::{
     Operator, SelectOperation, TransactionMessage, TransferOperation,
 };
 use crate::handles::{cache::HandlesCache, crypto::CryptoService, gateway::GatewayClient};
-use crate::utils::to_hex_with_prefix;
 use crate::{
     compute::{
         SolidityValue,
@@ -534,9 +533,9 @@ impl QueueService {
         let handle_entry = ResultEntry {
             handle,
             handle_value_tag: hex::encode_prefixed(handle_value_tag_bytes),
-            ciphertext: to_hex_with_prefix(&encrypted_result.ciphertext),
-            public_key: to_hex_with_prefix(&encrypted_result.ephemeral_pubkey),
-            nonce: to_hex_with_prefix(&encrypted_result.nonce),
+            ciphertext: hex::encode_prefixed(encrypted_result.ciphertext),
+            public_key: hex::encode_prefixed(encrypted_result.ephemeral_pubkey),
+            nonce: hex::encode_prefixed(encrypted_result.nonce),
         };
         Ok(handle_entry)
     }

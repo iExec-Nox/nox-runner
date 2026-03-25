@@ -18,8 +18,6 @@ use rsa::{Oaep, RsaPrivateKey, RsaPublicKey, pkcs8::EncodePublicKey};
 use sha2::Sha256;
 use tracing::info;
 
-use crate::utils::to_hex_with_prefix;
-
 const ECIES_CONTEXT: &[u8] = b"ECIES:AES_GCM:v1";
 
 pub struct EciesCiphertext {
@@ -42,13 +40,13 @@ impl CryptoService {
         let rsa_public_key = RsaPublicKey::from(&key).to_public_key_der()?;
 
         info!(
-            protocol_key = to_hex_with_prefix(&protocol_key_bytes),
+            protocol_key = hex::encode_prefixed(&protocol_key_bytes),
             "ECIES crypto service initialized"
         );
 
         Ok(Self {
             private: key.clone(),
-            public: format!("0x{}", hex::encode(rsa_public_key)),
+            public: hex::encode_prefixed(rsa_public_key),
             protocol_key,
         })
     }
