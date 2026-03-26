@@ -12,7 +12,6 @@ mod handlers;
 mod handles;
 mod queue;
 mod rpc;
-mod utils;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

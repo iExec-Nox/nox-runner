@@ -2,13 +2,16 @@
 //!
 //! All operands and results are encrypted with ECIES.
 //! See [`super::crypto`] for ECIES related operations.
-
-use alloy_primitives::{Address, B256, U256, hex};
+use alloy_primitives::{Address, FixedBytes, U256, hex};
 use alloy_signer::{Signature, SignerSync};
 use alloy_signer_local::PrivateKeySigner;
 use alloy_sol_types::{Eip712Domain, SolStruct, eip712_domain, sol};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use reqwest::{Client, header};
+use reqwest::{
+    Client,
+    header::{AUTHORIZATION, HeaderValue},
+};
+use rsa::rand_core::{OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use thiserror::Error;
@@ -85,16 +88,6 @@ sol! {
     }
 }
 
-/// Full authorization data to retrieve compute operands from the Handle Gateway.
-///
-/// It contains the plain [`OperandAccessAuthorization`] EIP-712 data with its signed hash.
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ComputeOperandRequest {
-    payload: OperandAccessAuthorization,
-    signature: String,
-}
-
 /// Operands retrieved from the Handle Gateway.
 ///
 /// It contains the plain [`ComputeOperands`] EIP-712 data with its signed hash.
@@ -102,16 +95,6 @@ struct ComputeOperandRequest {
 #[serde(rename_all = "camelCase")]
 pub struct ComputeOperandResponse {
     payload: ComputeOperands,
-    signature: String,
-}
-
-/// Full authorization data to publish compute results to the Handle Gateway.
-///
-/// It contains the plain [`ResultPublishingAuthorization`] EIP-712 data with its signed hash.
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ComputeResultRequest {
-    payload: ResultPublishingAuthorization,
     signature: String,
 }
 
@@ -129,6 +112,7 @@ pub struct GatewayClient {
     handle_gateway_signer_address: Address,
     signer: PrivateKeySigner,
     domain: Eip712Domain,
+    chain_id: u64,
 }
 
 impl GatewayClient {
@@ -150,6 +134,7 @@ impl GatewayClient {
             handle_gateway_signer_address,
             signer,
             domain,
+            chain_id,
         })
     }
 
@@ -168,6 +153,8 @@ impl GatewayClient {
         rsa_public_key: String,
         operands: Vec<String>,
     ) -> Result<Vec<OperandEntry>, GatewayError> {
+        let salt = self.generate_salt();
+
         let url = format!("{}/v0/compute/operands", self.url);
         let payload = OperandAccessAuthorization {
             caller,
@@ -175,19 +162,13 @@ impl GatewayClient {
             rsaPublicKey: rsa_public_key,
             operands,
         };
-        let signature = self
-            .signer
-            .sign_typed_data_sync(&payload, &self.domain)
-            .map_err(GatewayError::SignatureError)?
-            .to_string();
-        let auth = STANDARD.encode(json!(ComputeOperandRequest { payload, signature }).to_string());
-        let mut auth_value = header::HeaderValue::from_str(&format!("EIP712 {auth}"))
-            .map_err(GatewayError::InvalidHeaderValue)?;
-        auth_value.set_sensitive(true);
+        let auth_value = self.generate_authorization(&payload)?;
+
         let response = self
             .client
             .get(&url)
-            .header(header::AUTHORIZATION, auth_value)
+            .header(AUTHORIZATION, auth_value)
+            .query(&[("salt", &salt.to_string())])
             .send()
             .await
             .map_err(GatewayError::CommunicationError)?;
@@ -201,10 +182,10 @@ impl GatewayClient {
             .json::<ComputeOperandResponse>()
             .await
             .map_err(GatewayError::CommunicationError)?;
-        let hash = authorization.payload.eip712_signing_hash(&self.domain);
         self.recover_and_check_address(
             &self.handle_gateway_signer_address,
-            &hash,
+            &authorization.payload,
+            &salt,
             &authorization.signature,
         )?;
         let entries: Vec<OperandEntry> = authorization
@@ -238,6 +219,8 @@ impl GatewayClient {
         transaction_hash: String,
         handles: Vec<ResultEntry>,
     ) -> Result<(), GatewayError> {
+        let salt = self.generate_salt();
+
         let url = format!("{}/v0/compute/results", self.url);
         let payload = ResultPublishingAuthorization {
             chainId: U256::from(chain_id),
@@ -245,19 +228,13 @@ impl GatewayClient {
             caller,
             transactionHash: transaction_hash.clone(),
         };
-        let signature = self
-            .signer
-            .sign_typed_data_sync(&payload, &self.domain)
-            .map_err(GatewayError::SignatureError)?
-            .to_string();
-        let auth = STANDARD.encode(json!(ComputeResultRequest { payload, signature }).to_string());
-        let mut auth_value = header::HeaderValue::from_str(&format!("EIP712 {auth}"))
-            .map_err(GatewayError::InvalidHeaderValue)?;
-        auth_value.set_sensitive(true);
+        let auth_value = self.generate_authorization(&payload)?;
+
         let response = self
             .client
             .post(&url)
-            .header(header::AUTHORIZATION, auth_value)
+            .header(AUTHORIZATION, auth_value)
+            .query(&[("salt", &salt.to_string())])
             .json(&handles)
             .send()
             .await
@@ -272,14 +249,45 @@ impl GatewayClient {
             .json::<ComputeResultResponse>()
             .await
             .map_err(GatewayError::CommunicationError)?;
-        let hash = authorization.payload.eip712_signing_hash(&self.domain);
         self.recover_and_check_address(
             &self.handle_gateway_signer_address,
-            &hash,
+            &authorization.payload,
+            &salt,
             &authorization.signature,
         )?;
         info!(message = authorization.payload.message, transaction_hash);
         Ok(())
+    }
+
+    /// Generates value for AUTHORIZATION header
+    ///
+    /// # Errors
+    ///
+    /// The operation will fail with:
+    /// - [`GatewayError::SignatureError`] if the authorization token payload cannot be signed.
+    /// - [`GatewayError::InvalidHeaderValue`] if the authorization header value cannot be created.
+    fn generate_authorization<P>(&self, payload: &P) -> Result<HeaderValue, GatewayError>
+    where
+        P: Serialize + SolStruct,
+    {
+        let signature = self
+            .signer
+            .sign_typed_data_sync(payload, &self.domain)
+            .map_err(GatewayError::SignatureError)?
+            .to_string();
+        let auth =
+            STANDARD.encode(json!({ "payload": payload, "signature": signature }).to_string());
+        let mut auth_value = HeaderValue::from_str(&format!("EIP712 {auth}"))
+            .map_err(GatewayError::InvalidHeaderValue)?;
+        auth_value.set_sensitive(true);
+        Ok(auth_value)
+    }
+
+    /// Generates 32 bytes session salt for a single interaction with the Handle Gateway.
+    fn generate_salt(&self) -> FixedBytes<32> {
+        let mut salt = [0u8; 32];
+        OsRng.fill_bytes(&mut salt);
+        FixedBytes::<32>::from(salt)
     }
 
     /// Recovers the address used to sign an authorization token and verifies it against an expected address.
@@ -291,18 +299,29 @@ impl GatewayClient {
     /// - The signature bytes can not be converted to a `Signature`.
     /// - No address can be recovered from the provided `hash`.
     /// - There is a mismatch between the recovered address and the expected one.
-    fn recover_and_check_address(
+    fn recover_and_check_address<P>(
         &self,
         expected_address: &Address,
-        hash: &B256,
+        payload: &P,
+        salt: &FixedBytes<32>,
         signature: &str,
-    ) -> Result<(), GatewayError> {
+    ) -> Result<(), GatewayError>
+    where
+        P: SolStruct,
+    {
+        let domain = eip712_domain! {
+            name: HANDLE_GATEWAY_EIP712_DOMAIN_NAME,
+            version: "1",
+            chain_id: self.chain_id,
+            salt: *salt,
+        };
+        let hash = payload.eip712_signing_hash(&domain);
         let signature_bytes = hex::decode(signature)
             .map_err(|e| GatewayError::UnknownHandleGateway(e.to_string()))?;
         let signature = Signature::from_raw(&signature_bytes)
             .map_err(|e| GatewayError::UnknownHandleGateway(e.to_string()))?;
         let recovered_address = signature
-            .recover_address_from_prehash(hash)
+            .recover_address_from_prehash(&hash)
             .map_err(|e| GatewayError::UnknownHandleGateway(e.to_string()))?;
         if expected_address != &recovered_address {
             warn!(
