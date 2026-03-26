@@ -2,8 +2,6 @@
 //!
 //! All operands and results are encrypted with ECIES.
 //! See [`super::crypto`] for ECIES related operations.
-use std::collections::HashMap;
-
 use alloy_primitives::{Address, FixedBytes, U256, hex};
 use alloy_signer::{Signature, SignerSync};
 use alloy_signer_local::PrivateKeySigner;
@@ -156,8 +154,6 @@ impl GatewayClient {
         operands: Vec<String>,
     ) -> Result<Vec<OperandEntry>, GatewayError> {
         let salt = self.generate_salt();
-        let mut params = HashMap::new();
-        params.insert("salt", &salt);
 
         let url = format!("{}/v0/compute/operands", self.url);
         let payload = OperandAccessAuthorization {
@@ -172,7 +168,7 @@ impl GatewayClient {
             .client
             .get(&url)
             .header(AUTHORIZATION, auth_value)
-            .query(&params)
+            .query(&[("salt", &salt.to_string())])
             .send()
             .await
             .map_err(GatewayError::CommunicationError)?;
@@ -224,8 +220,6 @@ impl GatewayClient {
         handles: Vec<ResultEntry>,
     ) -> Result<(), GatewayError> {
         let salt = self.generate_salt();
-        let mut params = HashMap::new();
-        params.insert("salt", &salt);
 
         let url = format!("{}/v0/compute/results", self.url);
         let payload = ResultPublishingAuthorization {
@@ -240,7 +234,7 @@ impl GatewayClient {
             .client
             .post(&url)
             .header(AUTHORIZATION, auth_value)
-            .query(&params)
+            .query(&[("salt", &salt.to_string())])
             .json(&handles)
             .send()
             .await
