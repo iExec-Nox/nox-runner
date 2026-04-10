@@ -1,7 +1,7 @@
 //! Handle a [`TransactionMessage`] received through NATS.
 
 use alloy_primitives::{Address, FixedBytes, hex, utils::Keccak256};
-use futures::future::try_join_all;
+use futures_util::future::try_join_all;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 

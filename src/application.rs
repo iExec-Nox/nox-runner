@@ -2,7 +2,7 @@ use alloy_primitives::hex;
 use alloy_signer_local::PrivateKeySigner;
 use axum::{Router, routing::get};
 use axum_prometheus::{Handle, MakeDefaultHandle, PrometheusMetricLayerBuilder};
-use futures::StreamExt;
+use futures_util::StreamExt;
 use tracing::{error, info};
 
 use crate::config::Config;
