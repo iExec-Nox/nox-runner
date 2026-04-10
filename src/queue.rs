@@ -547,9 +547,6 @@ impl QueueService {
     }
 
     /// Formats and encrypts result from a 32-byte value to a valid solidity type size.
-    ///
-    /// In the scope of a given transaction, all results are written to cache in case they
-    /// are required as operands for another event.
     async fn format_and_encrypt_result(
         &self,
         handle: String,
