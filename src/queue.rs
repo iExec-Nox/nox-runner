@@ -1,8 +1,9 @@
 //! Handle a [`TransactionMessage`] received through NATS.
 
 use alloy_primitives::{Address, FixedBytes, hex, utils::Keccak256};
+use futures::future::try_join_all;
 use serde::{Deserialize, Serialize};
-use tracing::{error, info};
+use tracing::info;
 
 use crate::events::{
     ArithmeticOperation, BooleanOperation, BurnOperation, EncryptionOperation, MintOperation,
@@ -94,8 +95,12 @@ impl QueueService {
                 "Received event"
             );
             let event_result_entries = match event.operator {
-                Operator::PlaintextToEncrypted(operation) => self.encrypt_plaintext(operation)?,
-                Operator::WrapAsPublicHandle(operation) => self.encrypt_plaintext(operation)?,
+                Operator::PlaintextToEncrypted(operation) => {
+                    self.encrypt_plaintext(operation).await?
+                }
+                Operator::WrapAsPublicHandle(operation) => {
+                    self.encrypt_plaintext(operation).await?
+                }
                 Operator::Add(operation) => {
                     self.compute(
                         event.caller,
@@ -258,7 +263,7 @@ impl QueueService {
     ///
     /// A plaintext value is provided as bytes32 in the [`EncryptionOperation`] event.
     /// See PlaintextToEncrypted event in [`INoxCompute`](https://github.com/iExec-Nox/nox-protocol-contracts/blob/main/contracts/interfaces/INoxCompute.sol) interface.
-    fn encrypt_plaintext(
+    async fn encrypt_plaintext(
         &mut self,
         operation: EncryptionOperation,
     ) -> Result<Vec<ResultEntry>, String> {
@@ -267,8 +272,7 @@ impl QueueService {
             .parse()
             .map_err(|e| format!("Failed to parse input as bytes32: {e}"))?;
         let value = SolidityValue::from_bytes(operation.tee_type, value_bytes.0)?;
-        self.format_and_encrypt_result(operation.handle, value)
-            .map(|entry| vec![entry])
+        self.prepare_results(vec![(operation.handle, value)]).await
     }
 
     /// Performs a comparison between 2 handles representing a same numeric type and
@@ -287,8 +291,8 @@ impl QueueService {
             .fetch_operands(caller, transaction_hash, operand_handles)
             .await?;
         let result = compare(operator, operands[0].clone(), operands[1].clone())?;
-        self.format_and_encrypt_result(operation.result, SolidityValue::Boolean(result))
-            .map(|entry| vec![entry])
+        self.prepare_results(vec![(operation.result, SolidityValue::Boolean(result))])
+            .await
     }
 
     /// Performs an arithmetic computation.
@@ -306,8 +310,7 @@ impl QueueService {
             .fetch_operands(caller, transaction_hash, operand_handles)
             .await?;
         let result = compute(operator, operands[0].clone(), operands[1].clone())?;
-        self.format_and_encrypt_result(operation.result, result)
-            .map(|entry| vec![entry])
+        self.prepare_results(vec![(operation.result, result)]).await
     }
 
     /// Performs a safe arithmetic operation.
@@ -325,10 +328,11 @@ impl QueueService {
             .fetch_operands(caller, transaction_hash, operand_handles)
             .await?;
         let (success, result) = safe_compute(operator, operands[0].clone(), operands[1].clone())?;
-        Ok(vec![
-            self.format_and_encrypt_result(operation.success, SolidityValue::Boolean(success))?,
-            self.format_and_encrypt_result(operation.result, result)?,
+        self.prepare_results(vec![
+            (operation.success, SolidityValue::Boolean(success)),
+            (operation.result, result),
         ])
+        .await
     }
 
     /// Returns one between 2 handles depending on a condition.
@@ -351,8 +355,7 @@ impl QueueService {
             operands[1].clone(),
             operands[2].clone(),
         )?;
-        self.format_and_encrypt_result(operation.result, result)
-            .map(|entry| vec![entry])
+        self.prepare_results(vec![(operation.result, result)]).await
     }
 
     /// Confidential tokens transfer operation.
@@ -379,11 +382,12 @@ impl QueueService {
             operands[1].clone(),
             operands[2].clone(),
         )?;
-        Ok(vec![
-            self.format_and_encrypt_result(operation.success, success)?,
-            self.format_and_encrypt_result(operation.new_balance_from, new_balance_from)?,
-            self.format_and_encrypt_result(operation.new_balance_to, new_balance_to)?,
+        self.prepare_results(vec![
+            (operation.success, success),
+            (operation.new_balance_from, new_balance_from),
+            (operation.new_balance_to, new_balance_to),
         ])
+        .await
     }
 
     /// Confidential tokens mint operation.
@@ -410,11 +414,12 @@ impl QueueService {
             operands[1].clone(),
             operands[2].clone(),
         )?;
-        Ok(vec![
-            self.format_and_encrypt_result(operation.success, success)?,
-            self.format_and_encrypt_result(operation.new_balance_to, new_balance_to)?,
-            self.format_and_encrypt_result(operation.new_total_supply, new_total_supply)?,
+        self.prepare_results(vec![
+            (operation.success, success),
+            (operation.new_balance_to, new_balance_to),
+            (operation.new_total_supply, new_total_supply),
         ])
+        .await
     }
 
     /// Confidential tokens burn operation.
@@ -441,18 +446,24 @@ impl QueueService {
             operands[1].clone(),
             operands[2].clone(),
         )?;
-        Ok(vec![
-            self.format_and_encrypt_result(operation.success, success)?,
-            self.format_and_encrypt_result(operation.new_balance_from, new_balance_from)?,
-            self.format_and_encrypt_result(operation.new_total_supply, new_total_supply)?,
+        self.prepare_results(vec![
+            (operation.success, success),
+            (operation.new_balance_from, new_balance_from),
+            (operation.new_total_supply, new_total_supply),
         ])
+        .await
     }
 
     /// Fetches operands from the handle gateway for a required computation.
     ///
     /// The handle gateway checks at the same time that results handles do not exist.
+    /// Fetched operands are decrypted concurrently by calling [`Self::decrypt_and_format_operand`].
     /// To avoid multiple decryptions of the same operands, they are stored in cache for
     /// the lifetime of the current transaction computation.
+    ///
+    /// # Errors
+    ///
+    /// The method fails at the first error with `try_join_all`.
     async fn fetch_operands(
         &mut self,
         caller: Address,
@@ -473,14 +484,14 @@ impl QueueService {
             )
             .await
             .map_err(|e| format!("Failed to fetch operands from handle gateway: {e}"))?;
-        for encrypted_operand in encrypted_operands {
-            match self.decrypt_and_format_operand(&encrypted_operand) {
-                Ok(operand) => self
-                    .handles_cache
-                    .add_handle(&encrypted_operand.handle, operand),
-                Err(e) => error!("Operand decryption failure: {e}"),
-            }
-        }
+        try_join_all(
+            encrypted_operands
+                .iter()
+                .map(|encrypted_operand| self.decrypt_and_format_operand(encrypted_operand)),
+        )
+        .await?
+        .into_iter()
+        .for_each(|(handle, value)| self.handles_cache.add_handle(&handle, value));
         let operands = self.handles_cache.read_handles(operand_handles);
         let operands_decrypted_count = operands.len();
         if operands_decrypted_count != handles_expected_count {
@@ -493,7 +504,10 @@ impl QueueService {
     }
 
     /// Decrypts and converts an operand to its alloy-primitives type.
-    fn decrypt_and_format_operand(&self, entry: &OperandEntry) -> Result<SolidityValue, String> {
+    async fn decrypt_and_format_operand(
+        &self,
+        entry: &OperandEntry,
+    ) -> Result<(String, SolidityValue), String> {
         info!(handle = entry.handle, "decrypting operand");
         let data_bytes = self.crypto_svc.ecies_decrypt(
             &entry.ciphertext,
@@ -503,15 +517,41 @@ impl QueueService {
         let mut result = [0u8; 32];
         result[(32 - data_bytes.len())..32].copy_from_slice(&data_bytes);
         let solidity_type = get_solidity_type_from_handle(&entry.handle)?;
-        SolidityValue::from_bytes(solidity_type, result)
+        let value = SolidityValue::from_bytes(solidity_type, result)?;
+        Ok((entry.handle.clone(), value))
+    }
+
+    /// Prepares results and populate cache before next computation.
+    ///
+    /// Results are encrypted concurrently by calling [`Self::format_and_encrypt_result`].
+    /// On successful encryption, handles are stored in cache for the current
+    /// transaction computation.
+    ///
+    /// # Errors
+    ///
+    /// The method fails at the first error with `try_join_all`.
+    async fn prepare_results(
+        &mut self,
+        result_handles: Vec<(String, SolidityValue)>,
+    ) -> Result<Vec<ResultEntry>, String> {
+        let results =
+            try_join_all(result_handles.iter().map(|(handle, value)| {
+                self.format_and_encrypt_result(handle.clone(), value.clone())
+            }))
+            .await?;
+
+        result_handles
+            .into_iter()
+            .for_each(|(handle, value)| self.handles_cache.add_handle(&handle, value));
+        Ok(results)
     }
 
     /// Formats and encrypts result from a 32-byte value to a valid solidity type size.
     ///
     /// In the scope of a given transaction, all results are written to cache in case they
     /// are required as operands for another event.
-    fn format_and_encrypt_result(
-        &mut self,
+    async fn format_and_encrypt_result(
+        &self,
         handle: String,
         value: SolidityValue,
     ) -> Result<ResultEntry, String> {
@@ -526,7 +566,6 @@ impl QueueService {
         hasher.update(result_bytes);
         let handle_value_tag_bytes = hasher.finalize();
 
-        self.handles_cache.add_handle(&handle, value);
         let encrypted_result = self
             .crypto_svc
             .ecies_encrypt(&result_bytes[(32 - solidity_type_size)..32])?;
