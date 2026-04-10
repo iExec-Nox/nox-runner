@@ -2803,7 +2803,6 @@ dependencies = [
  "chrono",
  "config",
  "futures",
- "futures-util",
  "hkdf",
  "k256",
  "reqwest",
