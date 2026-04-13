@@ -115,6 +115,33 @@ pub enum Operator {
     Burn(BurnOperation),
 }
 
+impl Operator {
+    pub fn as_str(&self) -> &'static str {
+        match *self {
+            Operator::PlaintextToEncrypted(_) => "PlaintextToEncrypted",
+            Operator::WrapAsPublicHandle(_) => "WrapAsPublicHandle",
+            Operator::Add(_) => "Add",
+            Operator::Sub(_) => "Sub",
+            Operator::Mul(_) => "Mul",
+            Operator::Div(_) => "Div",
+            Operator::SafeAdd(_) => "SafeAdd",
+            Operator::SafeSub(_) => "SafeSub",
+            Operator::SafeMul(_) => "SafeMul",
+            Operator::SafeDiv(_) => "SafeDiv",
+            Operator::Eq(_) => "Eq",
+            Operator::Ne(_) => "Ne",
+            Operator::Ge(_) => "Ge",
+            Operator::Gt(_) => "Gt",
+            Operator::Le(_) => "Le",
+            Operator::Lt(_) => "Lt",
+            Operator::Select(_) => "Select",
+            Operator::Transfer(_) => "Transfer",
+            Operator::Mint(_) => "Mint",
+            Operator::Burn(_) => "Burn",
+        }
+    }
+}
+
 /// Individual event within a transaction
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
