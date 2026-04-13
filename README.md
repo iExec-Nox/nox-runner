@@ -136,6 +136,15 @@ Prometheus metrics endpoint for observability.
 
 **Response:** Prometheus text format metrics.
 
+The following Nox Runner metrics are available:
+
+| Metric | Description |
+| ------ | ----------- |
+| `nox_runner.transaction.received` | Counter to count each required transaction computation. |
+| `nox_runner.transaction.block_number` | Blockchain block number of the last transaction to compute. |
+| `nox_runner.operation` | Counter to count each operation. An `operator` label allows to distinguish all operators. |
+| `nox_runner.transaction.result` | Counter to observe computation results following 3 statuses (`SUCCESS`, `FAILURE`, `NOT_ACK`). |
+
 ---
 
 ### NATS Interface

@@ -1,7 +1,7 @@
 use alloy_primitives::hex;
 use alloy_signer_local::PrivateKeySigner;
 use axum::{Router, routing::get};
-use axum_prometheus::{Handle, MakeDefaultHandle, PrometheusMetricLayerBuilder};
+use axum_prometheus::{Handle, MakeDefaultHandle, PrometheusMetricLayerBuilder, metrics::counter};
 use futures_util::StreamExt;
 use tracing::{error, info};
 
@@ -96,16 +96,27 @@ impl Application {
                                     continue;
                                 }
                             };
+                            counter!("nox_runner.transaction.received").increment(1);
+                            counter!("nox_runner.transaction.block_number").absolute(transaction_message.block_number);
                             let transaction_hash = transaction_message.transaction_hash.clone();
                             match self.queue_svc.handle_message(transaction_message).await {
                                 Ok(_) => {
                                     info!(transaction_hash, "Compute PASS");
                                     match msg.ack().await {
-                                        Ok(_) => info!(transaction_hash, "ACK sent"),
-                                        Err(ack_err) => error!(transaction_hash, "ACK could not be sent {ack_err}"),
+                                        Ok(_) => {
+                                            counter!("nox_runner.transaction.result", "STATUS" => "SUCCESS").increment(1);
+                                            info!(transaction_hash, "ACK sent")
+                                        }
+                                        Err(ack_err) => {
+                                            counter!("nox_runner.transaction.result", "STATUS" => "NOT_ACK").increment(1);
+                                            error!(transaction_hash, "ACK could not be sent {ack_err}")
+                                        }
                                     };
                                 },
-                                Err(e) => error!(transaction_hash, "Compute FAIL {e}"),
+                                Err(e) => {
+                                    counter!("nox_runner.transaction.result", "STATUS" => "FAILURE").increment(1);
+                                    error!(transaction_hash, "Compute FAIL {e}")
+                                }
                             }
                             self.queue_svc.reset_cache();
                         },

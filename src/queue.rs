@@ -1,6 +1,7 @@
 //! Handle a [`TransactionMessage`] received through NATS.
 
 use alloy_primitives::{Address, FixedBytes, hex, utils::Keccak256};
+use axum_prometheus::metrics::counter;
 use serde::{Deserialize, Serialize};
 use tracing::{error, info};
 
@@ -93,6 +94,7 @@ impl QueueService {
                 operator = ?event.operator,
                 "Received event"
             );
+            counter!("nox_runner.operation", "operator" => event.operator.as_str()).increment(1);
             let event_result_entries = match event.operator {
                 Operator::PlaintextToEncrypted(operation) => self.encrypt_plaintext(operation)?,
                 Operator::WrapAsPublicHandle(operation) => self.encrypt_plaintext(operation)?,
