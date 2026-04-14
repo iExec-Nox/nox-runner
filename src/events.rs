@@ -93,7 +93,6 @@ pub struct BurnOperation {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum Operator {
-    PlaintextToEncrypted(EncryptionOperation),
     WrapAsPublicHandle(EncryptionOperation),
     Add(ArithmeticOperation),
     Sub(ArithmeticOperation),
@@ -118,7 +117,6 @@ pub enum Operator {
 impl Operator {
     pub fn as_str(&self) -> &'static str {
         match *self {
-            Operator::PlaintextToEncrypted(_) => "PlaintextToEncrypted",
             Operator::WrapAsPublicHandle(_) => "WrapAsPublicHandle",
             Operator::Add(_) => "Add",
             Operator::Sub(_) => "Sub",

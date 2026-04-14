@@ -96,7 +96,6 @@ impl QueueService {
             );
             counter!("nox_runner.operation", "operator" => event.operator.as_str()).increment(1);
             let event_result_entries = match event.operator {
-                Operator::PlaintextToEncrypted(operation) => self.encrypt_plaintext(operation)?,
                 Operator::WrapAsPublicHandle(operation) => self.encrypt_plaintext(operation)?,
                 Operator::Add(operation) => {
                     self.compute(
@@ -259,7 +258,7 @@ impl QueueService {
     /// Encrypts plaintext for storage in handle storage.
     ///
     /// A plaintext value is provided as bytes32 in the [`EncryptionOperation`] event.
-    /// See PlaintextToEncrypted event in [`INoxCompute`](https://github.com/iExec-Nox/nox-protocol-contracts/blob/main/contracts/interfaces/INoxCompute.sol) interface.
+    /// See WrapAsPublicHandle event in [`INoxCompute`](https://github.com/iExec-Nox/nox-protocol-contracts/blob/main/contracts/interfaces/INoxCompute.sol) interface.
     fn encrypt_plaintext(
         &mut self,
         operation: EncryptionOperation,
