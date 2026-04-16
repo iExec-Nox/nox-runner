@@ -43,15 +43,17 @@ impl Application {
     ///
     /// Received messages are deserialized as messages representing transactions.
     pub async fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let client = async_nats::connect(&self.config.nats_url).await?;
+        let client = async_nats::connect(&self.config.nats.url).await?;
         let jetstream = async_nats::jetstream::new(client);
-        let stream = jetstream.get_stream(&self.config.nats_stream_name).await?;
+        let stream = jetstream.get_stream(&self.config.nats.stream_name).await?;
         let consumer = stream
             .get_or_create_consumer(
-                &self.config.nats_consumer_name,
+                &self.config.nats.consumer_name,
                 async_nats::jetstream::consumer::pull::Config {
-                    durable_name: Some(self.config.nats_consumer_name.clone()),
-                    max_deliver: self.config.nats_consumer_max_deliver,
+                    durable_name: Some(self.config.nats.consumer_name.clone()),
+                    max_deliver: self.config.nats.consumer_max_deliver,
+                    max_ack_pending: self.config.nats.max_ack_pending,
+                    max_batch: self.config.nats.max_batch,
                     ..Default::default()
                 },
             )

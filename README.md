@@ -85,11 +85,13 @@ Configuration is loaded from environment variables with the `NOX_RUNNER_` prefix
 | `NOX_RUNNER_CHAIN_ID` | Chain ID for EIP-712 signing | No | `421614` (Arbitrum Sepolia) |
 | `NOX_RUNNER_RPC_URL` | Ethereum RPC endpoint for reading the `NoxCompute` contract | No | `http://localhost:8545` |
 | `NOX_RUNNER_NOX_COMPUTE_CONTRACT_ADDRESS` | `NoxCompute` contract address | No | `0x0000...0000` |
+| `NOX_RUNNER_NATS__URL` | NATS server URL | No | `nats://localhost:4222` |
+| `NOX_RUNNER_NATS__STREAM_NAME` | Name of the JetStream stream to consume | No | `nox_ingestor` |
+| `NOX_RUNNER_NATS__CONSUMER_NAME` | Durable consumer name | No | `nox_ingestor_consumer` |
+| `NOX_RUNNER_NATS__CONSUMER_MAX_DELIVER` | Maximum redelivery attempts per message | No | `10` |
+| `NOX_RUNNER_NATS__MAX_ACK_PENDING` | Buffer size of unacknowledged messages | No | `10` |
+| `NOX_RUNNER_NATS__MAX_BATCH` | Maximum number of messages the runner can pull from the stream | No | `10` |
 | `NOX_RUNNER_HANDLE_GATEWAY_URL` | Handle Gateway base URL | No | `http://localhost:3000` |
-| `NOX_RUNNER_NATS_URL` | NATS server URL | No | `nats://localhost:4222` |
-| `NOX_RUNNER_NATS_STREAM_NAME` | Name of the JetStream stream to consume | No | `nox_ingestor` |
-| `NOX_RUNNER_NATS_CONSUMER_NAME` | Durable consumer name | No | `nox_ingestor_consumer` |
-| `NOX_RUNNER_NATS_CONSUMER_MAX_DELIVER` | Maximum redelivery attempts per message | No | `3` |
 | `NOX_RUNNER_WALLET_KEY` | Private key used to sign Handle Gateway requests (hex, with or without `0x` prefix) | **Yes** | — |
 
 Logging level is controlled via the `RUST_LOG` environment variable:
