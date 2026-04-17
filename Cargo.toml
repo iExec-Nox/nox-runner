@@ -30,4 +30,8 @@ thiserror = "2.0.18"
 tokio = { version = "1.50.0", features = ["macros", "rt-multi-thread", "signal"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+validator = { version = "0.20.0", features = ["derive"] }
 zeroize = "1.8.2"
+
+[dev-dependencies]
+temp-env = "0.3.6"
