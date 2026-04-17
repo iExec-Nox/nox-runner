@@ -1,5 +1,6 @@
 use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use validator::Validate;
 
 use crate::application::Application;
 use crate::config::Config;
@@ -24,6 +25,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     let config = Config::load().inspect_err(|e| error!("Failed to load configuration: {e}"))?;
+    config
+        .validate()
+        .inspect_err(|e| error!("failed to validate configuration: {e}"))?;
 
     info!("Configuration loaded");
 
