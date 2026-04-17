@@ -58,7 +58,11 @@ impl Application {
                 },
             )
             .await?;
-        let mut subscriber = consumer.messages().await?;
+        let mut subscriber = consumer
+            .stream()
+            .max_messages_per_batch(usize::try_from(self.config.nats.max_batch)?)
+            .messages()
+            .await?;
 
         let prometheus_layer = PrometheusMetricLayerBuilder::new()
             .with_allow_patterns(&["/", "/health", "/metrics"])
