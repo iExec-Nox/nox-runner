@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.6.0](https://github.com/iExec-Nox/nox-runner/compare/v0.5.0...v0.6.0) (2026-04-17)
+
+
+### Features
+
+* expose first Nox metrics to Prometheus ([#35](https://github.com/iExec-Nox/nox-runner/issues/35)) ([21fe706](https://github.com/iExec-Nox/nox-runner/commit/21fe706f8c9dfd99ebbf87fbd39c290d4a903c78))
+* rework and add new parameters to NATS configuration ([#39](https://github.com/iExec-Nox/nox-runner/issues/39)) ([9bed9e3](https://github.com/iExec-Nox/nox-runner/commit/9bed9e3d65d3d195cb2345e0ccd92257be11edd7))
+
+
+### Bug Fixes
+
+* configure max_messages_per_batch on NATS consumer and add validation ([#40](https://github.com/iExec-Nox/nox-runner/issues/40)) ([6b8841e](https://github.com/iExec-Nox/nox-runner/commit/6b8841e5765228a544c7c7b2c92d0abce7e0cde5))
+* PlaintextToEncrypted event has been removed from NoxCompute ([#38](https://github.com/iExec-Nox/nox-runner/issues/38)) ([654f4c2](https://github.com/iExec-Nox/nox-runner/commit/654f4c21d45135d7877572ecaebf2015000a610c))
+
 ## [0.5.0](https://github.com/iExec-Nox/nox-runner/compare/v0.4.0...v0.5.0) (2026-03-28)
 
 
