@@ -1,6 +1,7 @@
 use alloy_primitives::{Address, hex};
-use config::{Config as ConfigBuilder, ConfigError, Environment};
+use config::{Config as ConfigBuilder, Environment};
 use serde::Deserialize;
+use tracing::error;
 use validator::{Validate, ValidationError};
 
 #[derive(Deserialize, Validate)]
@@ -39,8 +40,8 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn load() -> Result<Self, ConfigError> {
-        let config = ConfigBuilder::builder()
+    pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
+        let config: Self = ConfigBuilder::builder()
             .set_default("server.host", "127.0.0.1")?
             .set_default("server.port", "8080")?
             .set_default("rpc_url", "http://localhost:8545")?
@@ -60,8 +61,12 @@ impl Config {
                     .prefix_separator("_")
                     .separator("__"),
             )
-            .build()?;
-        config.try_deserialize()
+            .build()?
+            .try_deserialize()?;
+        config
+            .validate()
+            .inspect_err(|e| error!("failed to validate configuration: {e}"))?;
+        Ok(config)
     }
 
     /// Returns the `host:port` string used to bind the HTTP listener.
