@@ -2,10 +2,12 @@
 //!
 //! All operands and results are encrypted with ECIES.
 //! See [`super::crypto`] for ECIES related operations.
+use std::collections::HashMap;
+
 use alloy_primitives::{Address, FixedBytes, U256, hex};
 use alloy_signer::{Signature, SignerSync};
 use alloy_signer_local::PrivateKeySigner;
-use alloy_sol_types::{Eip712Domain, SolStruct, eip712_domain, sol};
+use alloy_sol_types::{SolStruct, eip712_domain, sol};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use reqwest::{
     Client,
@@ -41,10 +43,12 @@ sol! {
     /// This authorization allows the Handle Gateway to verify the operands are queried by a known Runner.
     #[derive(Serialize)]
     struct OperandAccessAuthorization {
+        uint256 chainId;
+        uint256 blockNumber;
         address caller;
+        string transactionHash;
         string[] operands;
         string rsaPublicKey;
-        string transactionHash;
     }
 
     /// EIP-712 compatible payload to allow a Runner to decrypt operands.
@@ -109,32 +113,22 @@ pub struct ComputeResultResponse {
 pub struct GatewayClient {
     client: Client,
     url: String,
-    handle_gateway_signer_address: Address,
+    handle_gateway_addresses: HashMap<u32, Address>,
     signer: PrivateKeySigner,
-    domain: Eip712Domain,
-    chain_id: u64,
 }
 
 impl GatewayClient {
     pub async fn new(
-        chain_id: u64,
         url: &str,
-        handle_gateway_signer_address: Address,
+        handle_gateway_addresses: HashMap<u32, Address>,
         signer: PrivateKeySigner,
     ) -> Result<Self, reqwest::Error> {
         let client = Client::builder().build()?;
-        let domain = eip712_domain! {
-            name: HANDLE_GATEWAY_EIP712_DOMAIN_NAME,
-            version: "1",
-            chain_id: chain_id,
-        };
         Ok(Self {
             client,
             url: url.to_string(),
-            handle_gateway_signer_address,
+            handle_gateway_addresses,
             signer,
-            domain,
-            chain_id,
         })
     }
 
@@ -148,6 +142,8 @@ impl GatewayClient {
     /// - [`GatewayError::CommunicationError`] on communication error with the Handle Gateway.
     pub async fn get_handles(
         &self,
+        chain_id: u32,
+        block_number: u64,
         caller: Address,
         transaction_hash: String,
         rsa_public_key: String,
@@ -157,12 +153,14 @@ impl GatewayClient {
 
         let url = format!("{}/v0/compute/operands", self.url);
         let payload = OperandAccessAuthorization {
+            chainId: U256::from(chain_id),
+            blockNumber: U256::from(block_number),
             caller,
             transactionHash: transaction_hash,
             rsaPublicKey: rsa_public_key,
             operands,
         };
-        let auth_value = self.generate_authorization(&payload)?;
+        let auth_value = self.generate_authorization(chain_id, &payload)?;
 
         let response = self
             .client
@@ -183,7 +181,7 @@ impl GatewayClient {
             .await
             .map_err(GatewayError::CommunicationError)?;
         self.recover_and_check_address(
-            &self.handle_gateway_signer_address,
+            chain_id,
             &authorization.payload,
             &salt,
             &authorization.signature,
@@ -228,7 +226,7 @@ impl GatewayClient {
             caller,
             transactionHash: transaction_hash.clone(),
         };
-        let auth_value = self.generate_authorization(&payload)?;
+        let auth_value = self.generate_authorization(chain_id, &payload)?;
 
         let response = self
             .client
@@ -250,7 +248,7 @@ impl GatewayClient {
             .await
             .map_err(GatewayError::CommunicationError)?;
         self.recover_and_check_address(
-            &self.handle_gateway_signer_address,
+            chain_id,
             &authorization.payload,
             &salt,
             &authorization.signature,
@@ -266,13 +264,22 @@ impl GatewayClient {
     /// The operation will fail with:
     /// - [`GatewayError::SignatureError`] if the authorization token payload cannot be signed.
     /// - [`GatewayError::InvalidHeaderValue`] if the authorization header value cannot be created.
-    fn generate_authorization<P>(&self, payload: &P) -> Result<HeaderValue, GatewayError>
+    fn generate_authorization<P>(
+        &self,
+        chain_id: u32,
+        payload: &P,
+    ) -> Result<HeaderValue, GatewayError>
     where
         P: Serialize + SolStruct,
     {
+        let domain = eip712_domain! {
+            name: HANDLE_GATEWAY_EIP712_DOMAIN_NAME,
+            version: "1",
+            chain_id: u64::from(chain_id),
+        };
         let signature = self
             .signer
-            .sign_typed_data_sync(payload, &self.domain)
+            .sign_typed_data_sync(payload, &domain)
             .map_err(GatewayError::SignatureError)?
             .to_string();
         let auth =
@@ -301,7 +308,7 @@ impl GatewayClient {
     /// - There is a mismatch between the recovered address and the expected one.
     fn recover_and_check_address<P>(
         &self,
-        expected_address: &Address,
+        chain_id: u32,
         payload: &P,
         salt: &FixedBytes<32>,
         signature: &str,
@@ -312,7 +319,7 @@ impl GatewayClient {
         let domain = eip712_domain! {
             name: HANDLE_GATEWAY_EIP712_DOMAIN_NAME,
             version: "1",
-            chain_id: self.chain_id,
+            chain_id: u64::from(chain_id),
             salt: *salt,
         };
         let hash = payload.eip712_signing_hash(&domain);
@@ -323,9 +330,9 @@ impl GatewayClient {
         let recovered_address = signature
             .recover_address_from_prehash(&hash)
             .map_err(|e| GatewayError::UnknownHandleGateway(e.to_string()))?;
-        if expected_address != &recovered_address {
+        if recovered_address != self.handle_gateway_addresses[&chain_id] {
             warn!(
-                user = expected_address.to_string(),
+                user = self.handle_gateway_addresses[&chain_id].to_string(),
                 recovered = recovered_address.to_string(),
                 "recovered address mismatch",
             );
