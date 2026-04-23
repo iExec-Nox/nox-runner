@@ -21,7 +21,7 @@ pub struct Application {
 
 impl Application {
     pub async fn new(config: Config) -> Result<Self, Box<dyn std::error::Error>> {
-        let mut crypto_svc = CryptoService::new().await?;
+        let mut protocol_keys: HashMap<u32, k256::PublicKey> = HashMap::new();
         let mut handle_gateway_addresses: HashMap<u32, Address> = HashMap::new();
         for chain_id in config.chains.keys().collect::<Vec<_>>() {
             let nox_rpc = NoxClient::new(
@@ -29,8 +29,14 @@ impl Application {
                 config.chains[chain_id].nox_compute_contract_address,
             )
             .await?;
-            let protocol_key_bytes = nox_rpc.get_kms_public_key().await?;
-            crypto_svc.register_protocol_key(*chain_id, &protocol_key_bytes)?;
+            let protocol_key = nox_rpc.get_kms_public_key().await?;
+            if protocol_keys.insert(*chain_id, protocol_key).is_some() {
+                return Err(format!(
+                    "Failed to register protocol key {} for chain {chain_id}",
+                    hex::encode_prefixed(protocol_key.to_sec1_bytes())
+                )
+                .into());
+            }
             let handle_gateway_address = nox_rpc.get_gateway_address().await?;
             if handle_gateway_addresses
                 .insert(*chain_id, handle_gateway_address)
@@ -40,6 +46,7 @@ impl Application {
             }
         }
 
+        let crypto_svc = CryptoService::new(protocol_keys).await?;
         let mut wallet_key_bytes = [0u8; 32];
         wallet_key_bytes.copy_from_slice(&hex::decode(&config.wallet_key)?);
         let signer = PrivateKeySigner::from_bytes(&wallet_key_bytes.into())?;

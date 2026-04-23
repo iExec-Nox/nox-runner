@@ -74,7 +74,7 @@ cargo run --release
 
 > [!IMPORTANT]
 > `<CHAIN_ID>` represents the chain ID (421614 for Arbitrum Sepolia) of the target blockchain network
-> where the `NoxCompute` smart contract has been deployed. The runner will be able to compute events
+> where the `NoxCompute` smart contract has been deployed. The Runner will be able to compute events
 > from transactions emitted from this `NoxCompute` smart contract deployment.
 
 ---

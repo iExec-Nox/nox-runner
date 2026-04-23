@@ -1,8 +1,9 @@
 //! This modules provides a service to interact with NoxCompute methods.
 
-use alloy_primitives::{Address, Bytes};
+use alloy_primitives::Address;
 use alloy_provider::RootProvider;
 use alloy_sol_types::sol;
+use k256::PublicKey;
 use tracing::error;
 
 sol! {
@@ -54,14 +55,14 @@ impl NoxClient {
     /// # Errors
     ///
     /// Returns [`Err`] in case of transport error.
-    pub async fn get_kms_public_key(&self) -> Result<Vec<u8>, String> {
-        let protocol_key_bytes: Bytes = self
+    pub async fn get_kms_public_key(&self) -> Result<PublicKey, String> {
+        let protocol_key_bytes = self
             .contract
             .kmsPublicKey()
             .call()
             .await
-            .map_err(|e| format!("Call to kmsPublicKey() failed: {e}"))
-            .inspect_err(|e| error!("{e}"))?;
-        Ok(protocol_key_bytes.to_vec())
+            .map_err(|e| format!("Call to kmsPublicKey() failed: {e}"))?;
+        PublicKey::from_sec1_bytes(&protocol_key_bytes)
+            .map_err(|e| format!("ailed to decode KMS public key {e}"))
     }
 }

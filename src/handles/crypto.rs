@@ -33,30 +33,16 @@ pub struct CryptoService {
 }
 
 impl CryptoService {
-    pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn new(
+        protocol_keys: HashMap<u32, PublicKey>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let key = RsaPrivateKey::new(&mut OsRng, 2048)?;
         let rsa_public_key = RsaPublicKey::from(&key).to_public_key_der()?;
         Ok(Self {
             private: key.clone(),
             public: hex::encode_prefixed(rsa_public_key),
-            protocol_keys: HashMap::new(),
+            protocol_keys,
         })
-    }
-
-    pub fn register_protocol_key(
-        &mut self,
-        chain_id: u32,
-        protocol_key_bytes: &[u8],
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let protocol_key = PublicKey::from_sec1_bytes(protocol_key_bytes)?;
-        if self.protocol_keys.insert(chain_id, protocol_key).is_some() {
-            return Err(format!(
-                "Failed to register protocol key {} for chain {chain_id}",
-                hex::encode_prefixed(protocol_key_bytes)
-            )
-            .into());
-        }
-        Ok(())
     }
 
     pub fn ecies_decrypt(
