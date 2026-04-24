@@ -196,7 +196,6 @@ Each entry in `events` carries a `type` discriminant that selects the operator, 
 
 | Type | Description | Fields |
 | ---- | ----------- | ------ |
-| `plaintext_to_encrypted` | Encrypts a plaintext `bytes32` value and stores it under a result handle | `value`, `teeType`, `handle` |
 | `wrap_as_public_handle` | Same as `plaintext_to_encrypted` for handles marked as publicly decryptable | `value`, `teeType`, `handle` |
 
 ##### Arithmetic
