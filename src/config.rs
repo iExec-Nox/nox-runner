@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use alloy_primitives::{Address, hex};
 use config::{Config as ConfigBuilder, ConfigError, Environment};
 use serde::Deserialize;
@@ -7,6 +9,14 @@ use validator::{Validate, ValidationError};
 pub struct ServerConfig {
     pub host: String,
     pub port: u16,
+}
+
+#[derive(Deserialize, Validate)]
+pub struct ChainConfig {
+    #[validate(url)]
+    pub rpc_url: String,
+    #[validate(custom(function = "validate_nox_compute_contract_address"))]
+    pub nox_compute_contract_address: Address,
 }
 
 #[derive(Deserialize, Validate)]
@@ -27,9 +37,8 @@ pub struct NatsConfig {
 pub struct Config {
     #[validate(nested)]
     pub server: ServerConfig,
-    pub chain_id: u64,
-    pub rpc_url: String,
-    pub nox_compute_contract_address: Address,
+    #[validate(nested)]
+    pub chains: HashMap<u32, ChainConfig>,
     #[validate(nested)]
     pub nats: NatsConfig,
     #[validate(url)]
@@ -43,11 +52,6 @@ impl Config {
         let config = ConfigBuilder::builder()
             .set_default("server.host", "127.0.0.1")?
             .set_default("server.port", "8080")?
-            .set_default("rpc_url", "http://localhost:8545")?
-            .set_default(
-                "nox_compute_contract_address",
-                "0x0000000000000000000000000000000000000000",
-            )?
             .set_default("handle_gateway_url", "http://localhost:3000")?
             .set_default("nats.url", "nats://localhost:4222")?
             .set_default("nats.stream_name", "nox_ingestor")?
@@ -70,6 +74,17 @@ impl Config {
     }
 }
 
+fn validate_nox_compute_contract_address(
+    nox_compute_contract_address: &Address,
+) -> Result<(), ValidationError> {
+    if *nox_compute_contract_address == Address::ZERO {
+        return Err(ValidationError::new(
+            "NoxCompute contract address should not be zero address",
+        ));
+    }
+    Ok(())
+}
+
 fn validate_wallet_key(wallet_key: &str) -> Result<(), ValidationError> {
     let wallet_key_bytes = hex::decode(wallet_key)
         .map_err(|_| ValidationError::new("wallet key is not a valid hex"))?;
@@ -87,13 +102,21 @@ fn validate_wallet_key(wallet_key: &str) -> Result<(), ValidationError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::str::FromStr;
     use validator::ValidationErrors;
 
     #[test]
     fn check_config() {
         temp_env::with_vars(
             [
-                ("NOX_RUNNER_CHAIN_ID", Some("31337")),
+                (
+                    "NOX_RUNNER_CHAINS__31337__RPC_URL",
+                    Some("http://localhost:8545"),
+                ),
+                (
+                    "NOX_RUNNER_CHAINS__31337__NOX_COMPUTE_CONTRACT_ADDRESS",
+                    Some("0x0A59a4e1F7f740CD6474312AfFC1446fA9B5ad9B"),
+                ),
                 (
                     "NOX_RUNNER_WALLET_KEY",
                     Some("0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
@@ -102,6 +125,11 @@ mod tests {
             || {
                 let config = Config::load().expect("should load");
                 config.validate().expect("should validate");
+                assert_eq!("http://localhost:8545", config.chains[&31337].rpc_url);
+                assert_eq!(
+                    Address::from_str("0x0A59a4e1F7f740CD6474312AfFC1446fA9B5ad9B").unwrap(),
+                    config.chains[&31337].nox_compute_contract_address
+                );
             },
         )
     }
@@ -110,11 +138,14 @@ mod tests {
     fn check_invalid_config() {
         temp_env::with_vars(
             [
-                ("NOX_RUNNER_CHAIN_ID", Some("31337")),
-                ("NOX_RUNNER_WALLET_KEY", Some("0x")),
-                ("NOX_RUNNER_RPC_URL", Some("")),
+                ("NOX_RUNNER_CHAINS__31337__RPC_URL", Some("")),
+                (
+                    "NOX_RUNNER_CHAINS__31337__NOX_COMPUTE_CONTRACT_ADDRESS",
+                    Some("0x0000000000000000000000000000000000000000"),
+                ),
                 ("NOX_RUNNER_NATS__MAX_ACK_PENDING", Some("500")),
                 ("NOX_RUNNER_NATS__MAX_BATCH", Some("500")),
+                ("NOX_RUNNER_WALLET_KEY", Some("0x")),
             ],
             || {
                 let config = Config::load().expect("should load");
@@ -124,5 +155,19 @@ mod tests {
                 assert!(ValidationErrors::has_error(&result, "wallet_key"));
             },
         )
+    }
+
+    #[test]
+    fn check_invalid_chain_config() {
+        let chain_config = ChainConfig {
+            rpc_url: "".to_string(),
+            nox_compute_contract_address: Address::ZERO,
+        };
+        let result = chain_config.validate();
+        assert!(ValidationErrors::has_error(&result, "rpc_url"));
+        assert!(ValidationErrors::has_error(
+            &result,
+            "nox_compute_contract_address"
+        ));
     }
 }

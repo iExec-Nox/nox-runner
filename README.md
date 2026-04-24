@@ -63,14 +63,19 @@ cd nox-runner
 
 # Set required environment variables
 export NOX_RUNNER_WALLET_KEY="0x..."
-export NOX_RUNNER_RPC_URL="https://..."
-export NOX_RUNNER_NOX_COMPUTE_CONTRACT_ADDRESS="0x..."
+export NOX_RUNNER_CHAINS__<CHAIN_ID>__RPC_URL="https://..."
+export NOX_RUNNER_CHAINS__<CHAIN_ID>__NOX_COMPUTE_CONTRACT_ADDRESS="0x..."
 export NOX_RUNNER_HANDLE_GATEWAY_URL="https://..."
 export NOX_RUNNER_NATS_URL="nats://..."
 
 # Build and run
 cargo run --release
 ```
+
+> [!IMPORTANT]
+> `<CHAIN_ID>` represents the chain ID (421614 for Arbitrum Sepolia) of the target blockchain network
+> where the `NoxCompute` smart contract has been deployed. The Runner will be able to compute events
+> from transactions emitted from this `NoxCompute` smart contract deployment.
 
 ---
 
@@ -82,9 +87,8 @@ Configuration is loaded from environment variables with the `NOX_RUNNER_` prefix
 | -------- | ----------- | -------- | ------- |
 | `NOX_RUNNER_SERVER__HOST` | Bind address for the HTTP server | No | `127.0.0.1` |
 | `NOX_RUNNER_SERVER__PORT` | Port for the HTTP server | No | `8080` |
-| `NOX_RUNNER_CHAIN_ID` | Chain ID for EIP-712 signing | No | `421614` (Arbitrum Sepolia) |
-| `NOX_RUNNER_RPC_URL` | Ethereum RPC endpoint for reading the `NoxCompute` contract | No | `http://localhost:8545` |
-| `NOX_RUNNER_NOX_COMPUTE_CONTRACT_ADDRESS` | `NoxCompute` contract address | No | `0x0000...0000` |
+| `NOX_RUNNER_CHAINS__<CHAIN_ID>__RPC_URL` | Ethereum RPC endpoint for reading the `NoxCompute` contract | No | `http://localhost:8545` |
+| `NOX_RUNNER_CHAINS__<CHAIN_ID>__NOX_COMPUTE_CONTRACT_ADDRESS` | `NoxCompute` contract address | No | `0x0000...0000` |
 | `NOX_RUNNER_NATS__URL` | NATS server URL | No | `nats://localhost:4222` |
 | `NOX_RUNNER_NATS__STREAM_NAME` | Name of the JetStream stream to consume | No | `nox_ingestor` |
 | `NOX_RUNNER_NATS__CONSUMER_NAME` | Durable consumer name | No | `nox_ingestor_consumer` |
@@ -192,7 +196,6 @@ Each entry in `events` carries a `type` discriminant that selects the operator, 
 
 | Type | Description | Fields |
 | ---- | ----------- | ------ |
-| `plaintext_to_encrypted` | Encrypts a plaintext `bytes32` value and stores it under a result handle | `value`, `teeType`, `handle` |
 | `wrap_as_public_handle` | Same as `plaintext_to_encrypted` for handles marked as publicly decryptable | `value`, `teeType`, `handle` |
 
 ##### Arithmetic

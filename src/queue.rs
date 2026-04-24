@@ -1,13 +1,13 @@
 //! Handle a [`TransactionMessage`] received through NATS.
 
-use alloy_primitives::{Address, FixedBytes, hex, utils::Keccak256};
+use alloy_primitives::{FixedBytes, hex, utils::Keccak256};
 use axum_prometheus::metrics::counter;
 use serde::{Deserialize, Serialize};
 use tracing::{error, info};
 
 use crate::events::{
     ArithmeticOperation, BooleanOperation, BurnOperation, EncryptionOperation, MintOperation,
-    Operator, SelectOperation, TransactionMessage, TransferOperation,
+    Operator, SelectOperation, TransactionMessage, TransactionMetadata, TransferOperation,
 };
 use crate::handles::{cache::HandlesCache, crypto::CryptoService, gateway::GatewayClient};
 use crate::{
@@ -86,157 +86,80 @@ impl QueueService {
         transaction_message: TransactionMessage,
     ) -> Result<(), String> {
         let mut tx_result_entries = Vec::new();
+        let metadata = transaction_message.get_metadata();
         for event in transaction_message.events {
-            let transaction_hash = transaction_message.transaction_hash.clone();
             info!(
-                transaction_hash,
+                chain_id = metadata.chain_id,
+                transaction_hash = metadata.transaction_hash,
                 log_index = event.log_index,
                 operator = ?event.operator,
                 "Received event"
             );
             counter!("nox_runner.operation", "operator" => event.operator.as_str()).increment(1);
             let event_result_entries = match event.operator {
-                Operator::WrapAsPublicHandle(operation) => self.encrypt_plaintext(operation)?,
+                Operator::WrapAsPublicHandle(operation) => {
+                    self.encrypt_plaintext(&metadata, operation)?
+                }
                 Operator::Add(operation) => {
-                    self.compute(
-                        event.caller,
-                        transaction_hash,
-                        ArithmeticOperator::Add,
-                        operation,
-                    )
-                    .await?
+                    self.compute(&metadata, ArithmeticOperator::Add, operation)
+                        .await?
                 }
                 Operator::Sub(operation) => {
-                    self.compute(
-                        event.caller,
-                        transaction_hash,
-                        ArithmeticOperator::Sub,
-                        operation,
-                    )
-                    .await?
+                    self.compute(&metadata, ArithmeticOperator::Sub, operation)
+                        .await?
                 }
                 Operator::Mul(operation) => {
-                    self.compute(
-                        event.caller,
-                        transaction_hash,
-                        ArithmeticOperator::Mul,
-                        operation,
-                    )
-                    .await?
+                    self.compute(&metadata, ArithmeticOperator::Mul, operation)
+                        .await?
                 }
                 Operator::Div(operation) => {
-                    self.compute(
-                        event.caller,
-                        transaction_hash,
-                        ArithmeticOperator::Div,
-                        operation,
-                    )
-                    .await?
+                    self.compute(&metadata, ArithmeticOperator::Div, operation)
+                        .await?
                 }
                 Operator::SafeAdd(operation) => {
-                    self.safe_compute(
-                        event.caller,
-                        transaction_hash,
-                        ArithmeticOperator::Add,
-                        operation,
-                    )
-                    .await?
+                    self.safe_compute(&metadata, ArithmeticOperator::Add, operation)
+                        .await?
                 }
                 Operator::SafeSub(operation) => {
-                    self.safe_compute(
-                        event.caller,
-                        transaction_hash,
-                        ArithmeticOperator::Sub,
-                        operation,
-                    )
-                    .await?
+                    self.safe_compute(&metadata, ArithmeticOperator::Sub, operation)
+                        .await?
                 }
                 Operator::SafeMul(operation) => {
-                    self.safe_compute(
-                        event.caller,
-                        transaction_hash,
-                        ArithmeticOperator::Mul,
-                        operation,
-                    )
-                    .await?
+                    self.safe_compute(&metadata, ArithmeticOperator::Mul, operation)
+                        .await?
                 }
                 Operator::SafeDiv(operation) => {
-                    self.safe_compute(
-                        event.caller,
-                        transaction_hash,
-                        ArithmeticOperator::Div,
-                        operation,
-                    )
-                    .await?
+                    self.safe_compute(&metadata, ArithmeticOperator::Div, operation)
+                        .await?
                 }
                 Operator::Eq(operation) => {
-                    self.compare(
-                        event.caller,
-                        transaction_hash,
-                        BooleanOperator::Eq,
-                        operation,
-                    )
-                    .await?
+                    self.compare(&metadata, BooleanOperator::Eq, operation)
+                        .await?
                 }
                 Operator::Ne(operation) => {
-                    self.compare(
-                        event.caller,
-                        transaction_hash,
-                        BooleanOperator::Ne,
-                        operation,
-                    )
-                    .await?
+                    self.compare(&metadata, BooleanOperator::Ne, operation)
+                        .await?
                 }
                 Operator::Ge(operation) => {
-                    self.compare(
-                        event.caller,
-                        transaction_hash,
-                        BooleanOperator::Ge,
-                        operation,
-                    )
-                    .await?
+                    self.compare(&metadata, BooleanOperator::Ge, operation)
+                        .await?
                 }
                 Operator::Gt(operation) => {
-                    self.compare(
-                        event.caller,
-                        transaction_hash,
-                        BooleanOperator::Gt,
-                        operation,
-                    )
-                    .await?
+                    self.compare(&metadata, BooleanOperator::Gt, operation)
+                        .await?
                 }
                 Operator::Le(operation) => {
-                    self.compare(
-                        event.caller,
-                        transaction_hash,
-                        BooleanOperator::Le,
-                        operation,
-                    )
-                    .await?
+                    self.compare(&metadata, BooleanOperator::Le, operation)
+                        .await?
                 }
                 Operator::Lt(operation) => {
-                    self.compare(
-                        event.caller,
-                        transaction_hash,
-                        BooleanOperator::Lt,
-                        operation,
-                    )
-                    .await?
-                }
-                Operator::Select(operation) => {
-                    self.select(event.caller, transaction_hash, operation)
+                    self.compare(&metadata, BooleanOperator::Lt, operation)
                         .await?
                 }
-                Operator::Transfer(operation) => {
-                    self.transfer(event.caller, transaction_hash, operation)
-                        .await?
-                }
-                Operator::Mint(operation) => {
-                    self.mint(event.caller, transaction_hash, operation).await?
-                }
-                Operator::Burn(operation) => {
-                    self.burn(event.caller, transaction_hash, operation).await?
-                }
+                Operator::Select(operation) => self.select(&metadata, operation).await?,
+                Operator::Transfer(operation) => self.transfer(&metadata, operation).await?,
+                Operator::Mint(operation) => self.mint(&metadata, operation).await?,
+                Operator::Burn(operation) => self.burn(&metadata, operation).await?,
             };
             for entry in event_result_entries {
                 tx_result_entries.push(entry);
@@ -261,6 +184,7 @@ impl QueueService {
     /// See WrapAsPublicHandle event in [`INoxCompute`](https://github.com/iExec-Nox/nox-protocol-contracts/blob/main/contracts/interfaces/INoxCompute.sol) interface.
     fn encrypt_plaintext(
         &mut self,
+        metadata: &TransactionMetadata,
         operation: EncryptionOperation,
     ) -> Result<Vec<ResultEntry>, String> {
         let value_bytes: FixedBytes<32> = operation
@@ -268,7 +192,7 @@ impl QueueService {
             .parse()
             .map_err(|e| format!("Failed to parse input as bytes32: {e}"))?;
         let value = SolidityValue::from_bytes(operation.tee_type, value_bytes.0)?;
-        self.format_and_encrypt_result(operation.handle, value)
+        self.format_and_encrypt_result(metadata, operation.handle, value)
             .map(|entry| vec![entry])
     }
 
@@ -278,17 +202,14 @@ impl QueueService {
     /// Comparisons are implemented in [`compare`]
     async fn compare(
         &mut self,
-        caller: Address,
-        transaction_hash: String,
+        metadata: &TransactionMetadata,
         operator: BooleanOperator,
         operation: BooleanOperation,
     ) -> Result<Vec<ResultEntry>, String> {
         let operand_handles = vec![operation.left_hand_operand, operation.right_hand_operand];
-        let operands = self
-            .fetch_operands(caller, transaction_hash, operand_handles)
-            .await?;
+        let operands = self.fetch_operands(metadata, operand_handles).await?;
         let result = compare(operator, operands[0].clone(), operands[1].clone())?;
-        self.format_and_encrypt_result(operation.result, SolidityValue::Boolean(result))
+        self.format_and_encrypt_result(metadata, operation.result, SolidityValue::Boolean(result))
             .map(|entry| vec![entry])
     }
 
@@ -297,17 +218,14 @@ impl QueueService {
     /// Arithmetic operations are implemented in [`compute`].
     async fn compute(
         &mut self,
-        caller: Address,
-        transaction_hash: String,
+        metadata: &TransactionMetadata,
         operator: ArithmeticOperator,
         operation: ArithmeticOperation,
     ) -> Result<Vec<ResultEntry>, String> {
         let operand_handles = vec![operation.left_hand_operand, operation.right_hand_operand];
-        let operands = self
-            .fetch_operands(caller, transaction_hash, operand_handles)
-            .await?;
+        let operands = self.fetch_operands(metadata, operand_handles).await?;
         let result = compute(operator, operands[0].clone(), operands[1].clone())?;
-        self.format_and_encrypt_result(operation.result, result)
+        self.format_and_encrypt_result(metadata, operation.result, result)
             .map(|entry| vec![entry])
     }
 
@@ -316,19 +234,20 @@ impl QueueService {
     /// Safe arithmetic operations are implemented in [`safe_compute`].
     async fn safe_compute(
         &mut self,
-        caller: Address,
-        transaction_hash: String,
+        metadata: &TransactionMetadata,
         operator: ArithmeticOperator,
         operation: SafeArithmeticOperation,
     ) -> Result<Vec<ResultEntry>, String> {
         let operand_handles = vec![operation.left_hand_operand, operation.right_hand_operand];
-        let operands = self
-            .fetch_operands(caller, transaction_hash, operand_handles)
-            .await?;
+        let operands = self.fetch_operands(metadata, operand_handles).await?;
         let (success, result) = safe_compute(operator, operands[0].clone(), operands[1].clone())?;
         Ok(vec![
-            self.format_and_encrypt_result(operation.success, SolidityValue::Boolean(success))?,
-            self.format_and_encrypt_result(operation.result, result)?,
+            self.format_and_encrypt_result(
+                metadata,
+                operation.success,
+                SolidityValue::Boolean(success),
+            )?,
+            self.format_and_encrypt_result(metadata, operation.result, result)?,
         ])
     }
 
@@ -339,20 +258,17 @@ impl QueueService {
     /// The operation is implemented in [`select`].
     async fn select(
         &mut self,
-        caller: Address,
-        transaction_hash: String,
+        metadata: &TransactionMetadata,
         operation: SelectOperation,
     ) -> Result<Vec<ResultEntry>, String> {
         let operand_handles = vec![operation.condition, operation.if_true, operation.if_false];
-        let operands = self
-            .fetch_operands(caller, transaction_hash, operand_handles)
-            .await?;
+        let operands = self.fetch_operands(metadata, operand_handles).await?;
         let result = select(
             operands[0].clone(),
             operands[1].clone(),
             operands[2].clone(),
         )?;
-        self.format_and_encrypt_result(operation.result, result)
+        self.format_and_encrypt_result(metadata, operation.result, result)
             .map(|entry| vec![entry])
     }
 
@@ -363,8 +279,7 @@ impl QueueService {
     /// The operation is implemented in [`transfer`].
     async fn transfer(
         &mut self,
-        caller: Address,
-        transaction_hash: String,
+        metadata: &TransactionMetadata,
         operation: TransferOperation,
     ) -> Result<Vec<ResultEntry>, String> {
         let operand_handles = vec![
@@ -372,18 +287,16 @@ impl QueueService {
             operation.balance_to,
             operation.amount,
         ];
-        let operands = self
-            .fetch_operands(caller, transaction_hash, operand_handles)
-            .await?;
+        let operands = self.fetch_operands(metadata, operand_handles).await?;
         let (success, new_balance_from, new_balance_to) = transfer(
             operands[0].clone(),
             operands[1].clone(),
             operands[2].clone(),
         )?;
         Ok(vec![
-            self.format_and_encrypt_result(operation.success, success)?,
-            self.format_and_encrypt_result(operation.new_balance_from, new_balance_from)?,
-            self.format_and_encrypt_result(operation.new_balance_to, new_balance_to)?,
+            self.format_and_encrypt_result(metadata, operation.success, success)?,
+            self.format_and_encrypt_result(metadata, operation.new_balance_from, new_balance_from)?,
+            self.format_and_encrypt_result(metadata, operation.new_balance_to, new_balance_to)?,
         ])
     }
 
@@ -394,8 +307,7 @@ impl QueueService {
     /// The operation is implemented in [`mint`].
     async fn mint(
         &mut self,
-        caller: Address,
-        transaction_hash: String,
+        metadata: &TransactionMetadata,
         operation: MintOperation,
     ) -> Result<Vec<ResultEntry>, String> {
         let operand_handles = vec![
@@ -403,18 +315,16 @@ impl QueueService {
             operation.amount,
             operation.total_supply,
         ];
-        let operands = self
-            .fetch_operands(caller, transaction_hash, operand_handles)
-            .await?;
+        let operands = self.fetch_operands(metadata, operand_handles).await?;
         let (success, new_balance_to, new_total_supply) = mint(
             operands[0].clone(),
             operands[1].clone(),
             operands[2].clone(),
         )?;
         Ok(vec![
-            self.format_and_encrypt_result(operation.success, success)?,
-            self.format_and_encrypt_result(operation.new_balance_to, new_balance_to)?,
-            self.format_and_encrypt_result(operation.new_total_supply, new_total_supply)?,
+            self.format_and_encrypt_result(metadata, operation.success, success)?,
+            self.format_and_encrypt_result(metadata, operation.new_balance_to, new_balance_to)?,
+            self.format_and_encrypt_result(metadata, operation.new_total_supply, new_total_supply)?,
         ])
     }
 
@@ -425,8 +335,7 @@ impl QueueService {
     /// The operation is implemented in [`burn`].
     async fn burn(
         &mut self,
-        caller: Address,
-        transaction_hash: String,
+        metadata: &TransactionMetadata,
         operation: BurnOperation,
     ) -> Result<Vec<ResultEntry>, String> {
         let operand_handles = vec![
@@ -434,18 +343,16 @@ impl QueueService {
             operation.amount,
             operation.total_supply,
         ];
-        let operands = self
-            .fetch_operands(caller, transaction_hash, operand_handles)
-            .await?;
+        let operands = self.fetch_operands(metadata, operand_handles).await?;
         let (success, new_balance_from, new_total_supply) = burn(
             operands[0].clone(),
             operands[1].clone(),
             operands[2].clone(),
         )?;
         Ok(vec![
-            self.format_and_encrypt_result(operation.success, success)?,
-            self.format_and_encrypt_result(operation.new_balance_from, new_balance_from)?,
-            self.format_and_encrypt_result(operation.new_total_supply, new_total_supply)?,
+            self.format_and_encrypt_result(metadata, operation.success, success)?,
+            self.format_and_encrypt_result(metadata, operation.new_balance_from, new_balance_from)?,
+            self.format_and_encrypt_result(metadata, operation.new_total_supply, new_total_supply)?,
         ])
     }
 
@@ -456,8 +363,7 @@ impl QueueService {
     /// the lifetime of the current transaction computation.
     async fn fetch_operands(
         &mut self,
-        caller: Address,
-        transaction_hash: String,
+        metadata: &TransactionMetadata,
         operand_handles: Vec<String>,
     ) -> Result<Vec<SolidityValue>, String> {
         let handles_expected_count = operand_handles.len();
@@ -467,8 +373,10 @@ impl QueueService {
         let encrypted_operands = self
             .handle_gateway
             .get_handles(
-                caller,
-                transaction_hash,
+                metadata.chain_id,
+                metadata.block_number,
+                metadata.caller,
+                metadata.transaction_hash.clone(),
                 self.crypto_svc.public.clone(),
                 missing_operand_handles,
             )
@@ -513,6 +421,7 @@ impl QueueService {
     /// are required as operands for another event.
     fn format_and_encrypt_result(
         &mut self,
+        metadata: &TransactionMetadata,
         handle: String,
         value: SolidityValue,
     ) -> Result<ResultEntry, String> {
@@ -528,9 +437,10 @@ impl QueueService {
         let handle_value_tag_bytes = hasher.finalize();
 
         self.handles_cache.add_handle(&handle, value);
-        let encrypted_result = self
-            .crypto_svc
-            .ecies_encrypt(&result_bytes[(32 - solidity_type_size)..32])?;
+        let encrypted_result = self.crypto_svc.ecies_encrypt(
+            metadata.chain_id,
+            &result_bytes[(32 - solidity_type_size)..32],
+        )?;
         let handle_entry = ResultEntry {
             handle,
             handle_value_tag: hex::encode_prefixed(handle_value_tag_bytes),

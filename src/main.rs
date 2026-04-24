@@ -27,7 +27,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::load().inspect_err(|e| error!("Failed to load configuration: {e}"))?;
     config
         .validate()
-        .inspect_err(|e| error!("failed to validate configuration: {e}"))?;
+        .inspect_err(|e| error!("Invalid configuration: {e}"))?;
 
     info!("Configuration loaded");
 

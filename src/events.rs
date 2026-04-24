@@ -145,7 +145,6 @@ impl Operator {
 #[serde(rename_all = "camelCase")]
 pub struct TransactionEvent {
     pub log_index: u64,
-    pub caller: Address,
     #[serde(flatten)]
     pub operator: Operator,
 }
@@ -164,4 +163,24 @@ pub struct TransactionMessage {
     pub transaction_hash: String,
     /// Events in this transaction, ordered by log_index
     pub events: Vec<TransactionEvent>,
+}
+
+impl TransactionMessage {
+    /// Retrieves transaction metadata to format them as [`TransactionMetadata`].
+    pub fn get_metadata(&self) -> TransactionMetadata {
+        TransactionMetadata {
+            chain_id: self.chain_id,
+            block_number: self.block_number,
+            caller: self.caller,
+            transaction_hash: self.transaction_hash.clone(),
+        }
+    }
+}
+
+/// Transaction metadata contained in a [`TransactionMessage`].
+pub struct TransactionMetadata {
+    pub chain_id: u32,
+    pub block_number: u64,
+    pub caller: Address,
+    pub transaction_hash: String,
 }
