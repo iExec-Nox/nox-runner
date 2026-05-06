@@ -35,7 +35,6 @@ jobs:
           echo "Processing tag on main branch: ${{ github.ref_name }}"
           echo "image_tag=${GITHUB_REF_NAME#v}" | tee -a $GITHUB_OUTPUT
 
-
   build-oci-image:
     name: Build OCI image
     needs: prepare
