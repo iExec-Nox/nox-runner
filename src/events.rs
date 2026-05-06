@@ -2,6 +2,7 @@
 
 use alloy_primitives::Address;
 use serde::Deserialize;
+use strum_macros::VariantNames;
 
 /// Handle type for encrypted values (hex-encoded bytes32)
 pub type Handle = String;
@@ -90,7 +91,7 @@ pub struct BurnOperation {
 }
 
 /// Event payload with typed variants
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, VariantNames)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum Operator {
     WrapAsPublicHandle(EncryptionOperation),

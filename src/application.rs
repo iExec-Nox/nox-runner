@@ -99,6 +99,12 @@ impl Application {
         let listener = tokio::net::TcpListener::bind(binding_address).await?;
         tokio::spawn(async move { axum::serve(listener, app).await });
 
+        counter!("nox_runner.transaction.received").absolute(0);
+        counter!("nox_runner.transaction.result", "status" => "SUCCESS").absolute(0);
+        counter!("nox_runner.transaction.result", "status" => "NOT_ACK").absolute(0);
+        counter!("nox_runner.transaction.result", "status" => "FAILURE").absolute(0);
+        self.queue_svc.init_metrics();
+
         info!("entering main loop to receive messages from NATS JetStream");
         loop {
             tokio::select! {
@@ -128,17 +134,17 @@ impl Application {
                                     info!(transaction_hash, "Compute PASS");
                                     match msg.ack().await {
                                         Ok(_) => {
-                                            counter!("nox_runner.transaction.result", "STATUS" => "SUCCESS").increment(1);
+                                            counter!("nox_runner.transaction.result", "status" => "SUCCESS").increment(1);
                                             info!(transaction_hash, "ACK sent")
                                         }
                                         Err(ack_err) => {
-                                            counter!("nox_runner.transaction.result", "STATUS" => "NOT_ACK").increment(1);
+                                            counter!("nox_runner.transaction.result", "status" => "NOT_ACK").increment(1);
                                             error!(transaction_hash, "ACK could not be sent {ack_err}")
                                         }
                                     };
                                 },
                                 Err(e) => {
-                                    counter!("nox_runner.transaction.result", "STATUS" => "FAILURE").increment(1);
+                                    counter!("nox_runner.transaction.result", "status" => "FAILURE").increment(1);
                                     error!(transaction_hash, "Compute FAIL {e}")
                                 }
                             }
