@@ -3,6 +3,7 @@
 use alloy_primitives::{FixedBytes, hex, utils::Keccak256};
 use axum_prometheus::metrics::counter;
 use serde::{Deserialize, Serialize};
+use strum::VariantNames;
 use tracing::{error, info};
 
 use crate::events::{
@@ -66,6 +67,15 @@ impl QueueService {
             handles_cache: HandlesCache::new(),
             crypto_svc,
             handle_gateway,
+        }
+    }
+
+    /// Initializes Prometheus metrics counters.
+    ///
+    /// This method needs to be called after the observability harness has been configured.
+    pub fn init_metrics(&self) {
+        for operator in Operator::VARIANTS {
+            counter!("nox_runner.operation", "operator" => *operator).absolute(0);
         }
     }
 
