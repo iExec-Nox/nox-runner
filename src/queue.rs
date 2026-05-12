@@ -73,9 +73,9 @@ impl QueueService {
     /// Initializes Prometheus metrics counters.
     ///
     /// This method needs to be called after the observability harness has been configured.
-    pub fn init_metrics(&self) {
+    pub fn init_metrics(&self, chain_id: String) {
         for operator in Operator::VARIANTS {
-            counter!("nox_runner.operation", "operator" => *operator).absolute(0);
+            counter!("nox_runner.operation", "chain_id" => chain_id.clone(), "operator" => *operator).absolute(0);
         }
     }
 
@@ -93,20 +93,21 @@ impl QueueService {
     /// At the end of the transaction, before publishing handles to the Handle Gateway, the cache is cleared.
     pub async fn handle_message(
         &mut self,
-        transaction_message: TransactionMessage,
+        transaction_message: &TransactionMessage,
     ) -> Result<(), String> {
         let mut tx_result_entries = Vec::new();
         let metadata = transaction_message.get_metadata();
-        for event in transaction_message.events {
+        let chain_id = metadata.chain_id.to_string();
+        for event in &transaction_message.events {
             info!(
-                chain_id = metadata.chain_id,
+                chain_id = chain_id,
                 transaction_hash = metadata.transaction_hash,
                 log_index = event.log_index,
                 operator = ?event.operator,
                 "Received event"
             );
-            counter!("nox_runner.operation", "operator" => event.operator.as_str()).increment(1);
-            let event_result_entries = match event.operator {
+            counter!("nox_runner.operation", "chain_id" => chain_id.clone(), "operator" => event.operator.as_str()).increment(1);
+            let event_result_entries = match &event.operator {
                 Operator::WrapAsPublicHandle(operation) => {
                     self.encrypt_plaintext(&metadata, operation)?
                 }
@@ -180,7 +181,7 @@ impl QueueService {
                 transaction_message.chain_id,
                 transaction_message.block_number,
                 transaction_message.caller,
-                transaction_message.transaction_hash,
+                &transaction_message.transaction_hash,
                 tx_result_entries,
             )
             .await
@@ -195,14 +196,14 @@ impl QueueService {
     fn encrypt_plaintext(
         &mut self,
         metadata: &TransactionMetadata,
-        operation: EncryptionOperation,
+        operation: &EncryptionOperation,
     ) -> Result<Vec<ResultEntry>, String> {
         let value_bytes: FixedBytes<32> = operation
             .value
             .parse()
             .map_err(|e| format!("Failed to parse input as bytes32: {e}"))?;
         let value = SolidityValue::from_bytes(operation.tee_type, value_bytes.0)?;
-        self.format_and_encrypt_result(metadata, operation.handle, value)
+        self.format_and_encrypt_result(metadata, &operation.handle, value)
             .map(|entry| vec![entry])
     }
 
@@ -214,12 +215,13 @@ impl QueueService {
         &mut self,
         metadata: &TransactionMetadata,
         operator: BooleanOperator,
-        operation: BooleanOperation,
+        operation: &BooleanOperation,
     ) -> Result<Vec<ResultEntry>, String> {
-        let operand_handles = vec![operation.left_hand_operand, operation.right_hand_operand];
-        let operands = self.fetch_operands(metadata, operand_handles).await?;
+        let operand_handles: [&str; 2] =
+            [&operation.left_hand_operand, &operation.right_hand_operand];
+        let operands = self.fetch_operands(metadata, &operand_handles).await?;
         let result = compare(operator, operands[0].clone(), operands[1].clone())?;
-        self.format_and_encrypt_result(metadata, operation.result, SolidityValue::Boolean(result))
+        self.format_and_encrypt_result(metadata, &operation.result, SolidityValue::Boolean(result))
             .map(|entry| vec![entry])
     }
 
@@ -230,12 +232,13 @@ impl QueueService {
         &mut self,
         metadata: &TransactionMetadata,
         operator: ArithmeticOperator,
-        operation: ArithmeticOperation,
+        operation: &ArithmeticOperation,
     ) -> Result<Vec<ResultEntry>, String> {
-        let operand_handles = vec![operation.left_hand_operand, operation.right_hand_operand];
-        let operands = self.fetch_operands(metadata, operand_handles).await?;
+        let operand_handles: [&str; 2] =
+            [&operation.left_hand_operand, &operation.right_hand_operand];
+        let operands = self.fetch_operands(metadata, &operand_handles).await?;
         let result = compute(operator, operands[0].clone(), operands[1].clone())?;
-        self.format_and_encrypt_result(metadata, operation.result, result)
+        self.format_and_encrypt_result(metadata, &operation.result, result)
             .map(|entry| vec![entry])
     }
 
@@ -246,18 +249,19 @@ impl QueueService {
         &mut self,
         metadata: &TransactionMetadata,
         operator: ArithmeticOperator,
-        operation: SafeArithmeticOperation,
+        operation: &SafeArithmeticOperation,
     ) -> Result<Vec<ResultEntry>, String> {
-        let operand_handles = vec![operation.left_hand_operand, operation.right_hand_operand];
-        let operands = self.fetch_operands(metadata, operand_handles).await?;
+        let operand_handles: [&str; 2] =
+            [&operation.left_hand_operand, &operation.right_hand_operand];
+        let operands = self.fetch_operands(metadata, &operand_handles).await?;
         let (success, result) = safe_compute(operator, operands[0].clone(), operands[1].clone())?;
         Ok(vec![
             self.format_and_encrypt_result(
                 metadata,
-                operation.success,
+                &operation.success,
                 SolidityValue::Boolean(success),
             )?,
-            self.format_and_encrypt_result(metadata, operation.result, result)?,
+            self.format_and_encrypt_result(metadata, &operation.result, result)?,
         ])
     }
 
@@ -269,16 +273,20 @@ impl QueueService {
     async fn select(
         &mut self,
         metadata: &TransactionMetadata,
-        operation: SelectOperation,
+        operation: &SelectOperation,
     ) -> Result<Vec<ResultEntry>, String> {
-        let operand_handles = vec![operation.condition, operation.if_true, operation.if_false];
-        let operands = self.fetch_operands(metadata, operand_handles).await?;
+        let operand_handles: [&str; 3] = [
+            &operation.condition,
+            &operation.if_true,
+            &operation.if_false,
+        ];
+        let operands = self.fetch_operands(metadata, &operand_handles).await?;
         let result = select(
             operands[0].clone(),
             operands[1].clone(),
             operands[2].clone(),
         )?;
-        self.format_and_encrypt_result(metadata, operation.result, result)
+        self.format_and_encrypt_result(metadata, &operation.result, result)
             .map(|entry| vec![entry])
     }
 
@@ -290,23 +298,27 @@ impl QueueService {
     async fn transfer(
         &mut self,
         metadata: &TransactionMetadata,
-        operation: TransferOperation,
+        operation: &TransferOperation,
     ) -> Result<Vec<ResultEntry>, String> {
-        let operand_handles = vec![
-            operation.balance_from,
-            operation.balance_to,
-            operation.amount,
+        let operand_handles: [&str; 3] = [
+            &operation.balance_from,
+            &operation.balance_to,
+            &operation.amount,
         ];
-        let operands = self.fetch_operands(metadata, operand_handles).await?;
+        let operands = self.fetch_operands(metadata, &operand_handles).await?;
         let (success, new_balance_from, new_balance_to) = transfer(
             operands[0].clone(),
             operands[1].clone(),
             operands[2].clone(),
         )?;
         Ok(vec![
-            self.format_and_encrypt_result(metadata, operation.success, success)?,
-            self.format_and_encrypt_result(metadata, operation.new_balance_from, new_balance_from)?,
-            self.format_and_encrypt_result(metadata, operation.new_balance_to, new_balance_to)?,
+            self.format_and_encrypt_result(metadata, &operation.success, success)?,
+            self.format_and_encrypt_result(
+                metadata,
+                &operation.new_balance_from,
+                new_balance_from,
+            )?,
+            self.format_and_encrypt_result(metadata, &operation.new_balance_to, new_balance_to)?,
         ])
     }
 
@@ -318,23 +330,27 @@ impl QueueService {
     async fn mint(
         &mut self,
         metadata: &TransactionMetadata,
-        operation: MintOperation,
+        operation: &MintOperation,
     ) -> Result<Vec<ResultEntry>, String> {
-        let operand_handles = vec![
-            operation.balance_to,
-            operation.amount,
-            operation.total_supply,
+        let operand_handles: [&str; 3] = [
+            &operation.balance_to,
+            &operation.amount,
+            &operation.total_supply,
         ];
-        let operands = self.fetch_operands(metadata, operand_handles).await?;
+        let operands = self.fetch_operands(metadata, &operand_handles).await?;
         let (success, new_balance_to, new_total_supply) = mint(
             operands[0].clone(),
             operands[1].clone(),
             operands[2].clone(),
         )?;
         Ok(vec![
-            self.format_and_encrypt_result(metadata, operation.success, success)?,
-            self.format_and_encrypt_result(metadata, operation.new_balance_to, new_balance_to)?,
-            self.format_and_encrypt_result(metadata, operation.new_total_supply, new_total_supply)?,
+            self.format_and_encrypt_result(metadata, &operation.success, success)?,
+            self.format_and_encrypt_result(metadata, &operation.new_balance_to, new_balance_to)?,
+            self.format_and_encrypt_result(
+                metadata,
+                &operation.new_total_supply,
+                new_total_supply,
+            )?,
         ])
     }
 
@@ -346,23 +362,31 @@ impl QueueService {
     async fn burn(
         &mut self,
         metadata: &TransactionMetadata,
-        operation: BurnOperation,
+        operation: &BurnOperation,
     ) -> Result<Vec<ResultEntry>, String> {
-        let operand_handles = vec![
-            operation.balance_from,
-            operation.amount,
-            operation.total_supply,
+        let operand_handles: [&str; 3] = [
+            &operation.balance_from,
+            &operation.amount,
+            &operation.total_supply,
         ];
-        let operands = self.fetch_operands(metadata, operand_handles).await?;
+        let operands = self.fetch_operands(metadata, &operand_handles).await?;
         let (success, new_balance_from, new_total_supply) = burn(
             operands[0].clone(),
             operands[1].clone(),
             operands[2].clone(),
         )?;
         Ok(vec![
-            self.format_and_encrypt_result(metadata, operation.success, success)?,
-            self.format_and_encrypt_result(metadata, operation.new_balance_from, new_balance_from)?,
-            self.format_and_encrypt_result(metadata, operation.new_total_supply, new_total_supply)?,
+            self.format_and_encrypt_result(metadata, &operation.success, success)?,
+            self.format_and_encrypt_result(
+                metadata,
+                &operation.new_balance_from,
+                new_balance_from,
+            )?,
+            self.format_and_encrypt_result(
+                metadata,
+                &operation.new_total_supply,
+                new_total_supply,
+            )?,
         ])
     }
 
@@ -374,12 +398,12 @@ impl QueueService {
     async fn fetch_operands(
         &mut self,
         metadata: &TransactionMetadata,
-        operand_handles: Vec<String>,
+        operand_handles: &[&str],
     ) -> Result<Vec<SolidityValue>, String> {
         let handles_expected_count = operand_handles.len();
         let missing_operand_handles = self
             .handles_cache
-            .find_handles_not_in_cache(operand_handles.clone());
+            .find_handles_not_in_cache(operand_handles);
         let encrypted_operands = self
             .handle_gateway
             .get_handles(
@@ -432,27 +456,27 @@ impl QueueService {
     fn format_and_encrypt_result(
         &mut self,
         metadata: &TransactionMetadata,
-        handle: String,
+        handle: &str,
         value: SolidityValue,
     ) -> Result<ResultEntry, String> {
-        let solidity_type = get_solidity_type_from_handle(&handle)?;
+        let solidity_type = get_solidity_type_from_handle(handle)?;
         let solidity_type_size = get_solidity_type_size(solidity_type)?;
         let result_bytes = value.to_bytes();
 
         let handle_bytes =
-            hex::decode(&handle).map_err(|e| format!("Failed to decode {handle} to bytes: {e}"))?;
+            hex::decode(handle).map_err(|e| format!("Failed to decode {handle} to bytes: {e}"))?;
         let mut hasher = Keccak256::new();
         hasher.update(&handle_bytes);
         hasher.update(result_bytes);
         let handle_value_tag_bytes = hasher.finalize();
 
-        self.handles_cache.add_handle(&handle, value);
+        self.handles_cache.add_handle(handle, value);
         let encrypted_result = self.crypto_svc.ecies_encrypt(
             metadata.chain_id,
             &result_bytes[(32 - solidity_type_size)..32],
         )?;
         let handle_entry = ResultEntry {
-            handle,
+            handle: handle.to_string(),
             handle_value_tag: hex::encode_prefixed(handle_value_tag_bytes),
             ciphertext: hex::encode_prefixed(encrypted_result.ciphertext),
             public_key: hex::encode_prefixed(encrypted_result.ephemeral_pubkey),

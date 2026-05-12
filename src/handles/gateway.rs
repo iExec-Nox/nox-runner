@@ -214,7 +214,7 @@ impl GatewayClient {
         chain_id: u32,
         block_number: u64,
         caller: Address,
-        transaction_hash: String,
+        transaction_hash: &str,
         handles: Vec<ResultEntry>,
     ) -> Result<(), GatewayError> {
         let salt = self.generate_salt();
@@ -224,7 +224,7 @@ impl GatewayClient {
             chainId: U256::from(chain_id),
             blockNumber: U256::from(block_number),
             caller,
-            transactionHash: transaction_hash.clone(),
+            transactionHash: transaction_hash.to_string(),
         };
         let auth_value = self.generate_authorization(chain_id, &payload)?;
 
