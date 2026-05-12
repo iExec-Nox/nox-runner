@@ -73,9 +73,9 @@ impl QueueService {
     /// Initializes Prometheus metrics counters.
     ///
     /// This method needs to be called after the observability harness has been configured.
-    pub fn init_metrics(&self, chain_id: &u32) {
+    pub fn init_metrics(&self, chain_id: String) {
         for operator in Operator::VARIANTS {
-            counter!("nox_runner.operation", "chain_id" => chain_id.to_string(), "operator" => *operator).absolute(0);
+            counter!("nox_runner.operation", "chain_id" => chain_id.clone(), "operator" => *operator).absolute(0);
         }
     }
 
@@ -97,15 +97,16 @@ impl QueueService {
     ) -> Result<(), String> {
         let mut tx_result_entries = Vec::new();
         let metadata = transaction_message.get_metadata();
+        let chain_id = metadata.chain_id.to_string();
         for event in &transaction_message.events {
             info!(
-                chain_id = metadata.chain_id,
+                chain_id = chain_id,
                 transaction_hash = metadata.transaction_hash,
                 log_index = event.log_index,
                 operator = ?event.operator,
                 "Received event"
             );
-            counter!("nox_runner.operation", "chain_id" => metadata.chain_id.to_string(), "operator" => event.operator.as_str()).increment(1);
+            counter!("nox_runner.operation", "chain_id" => chain_id.clone(), "operator" => event.operator.as_str()).increment(1);
             let event_result_entries = match &event.operator {
                 Operator::WrapAsPublicHandle(operation) => {
                     self.encrypt_plaintext(&metadata, operation)?

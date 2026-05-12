@@ -100,11 +100,11 @@ impl Application {
         tokio::spawn(async move { axum::serve(listener, app).await });
 
         for chain_id in self.config.chains.keys() {
-            counter!("nox_runner.transaction.received", "chain_id" => chain_id.to_string())
-                .absolute(0);
-            counter!("nox_runner.transaction.result", "chain_id" => chain_id.to_string(), "status" => "SUCCESS").absolute(0);
-            counter!("nox_runner.transaction.result", "chain_id" => chain_id.to_string(), "status" => "NOT_ACK").absolute(0);
-            counter!("nox_runner.transaction.result", "chain_id" => chain_id.to_string(), "status" => "FAILURE").absolute(0);
+            let chain_id = chain_id.to_string();
+            counter!("nox_runner.transaction.received", "chain_id" => chain_id.clone()).absolute(0);
+            counter!("nox_runner.transaction.result", "chain_id" => chain_id.clone(), "status" => "SUCCESS").absolute(0);
+            counter!("nox_runner.transaction.result", "chain_id" => chain_id.clone(), "status" => "NOT_ACK").absolute(0);
+            counter!("nox_runner.transaction.result", "chain_id" => chain_id.clone(), "status" => "FAILURE").absolute(0);
             self.queue_svc.init_metrics(chain_id);
         }
 
