@@ -45,20 +45,21 @@ impl HandlesCache {
     }
 
     /// Checks a list of handles against the cache and returns those which are not present.
-    pub fn find_handles_not_in_cache(&self, operand_handles: Vec<String>) -> Vec<String> {
+    pub fn find_handles_not_in_cache(&self, operand_handles: &[&str]) -> Vec<String> {
         operand_handles
-            .into_iter()
-            .filter(|handle| !self.inner.contains_key(handle))
+            .iter()
+            .filter(|handle| !self.inner.contains_key(**handle))
+            .map(|handle| handle.to_string())
             .collect()
     }
 
     /// Fetches a list of handles from the cache.
     ///
     /// The implementation does not guarantee that all values will be found.
-    pub fn read_handles(&self, operand_handles: Vec<String>) -> Vec<SolidityValue> {
+    pub fn read_handles(&self, operand_handles: &[&str]) -> Vec<SolidityValue> {
         operand_handles
             .iter()
-            .filter_map(|handle| self.inner.get(handle).cloned())
+            .filter_map(|handle| self.inner.get(*handle).cloned())
             .collect()
     }
 }

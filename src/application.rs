@@ -99,11 +99,14 @@ impl Application {
         let listener = tokio::net::TcpListener::bind(binding_address).await?;
         tokio::spawn(async move { axum::serve(listener, app).await });
 
-        counter!("nox_runner.transaction.received").absolute(0);
-        counter!("nox_runner.transaction.result", "status" => "SUCCESS").absolute(0);
-        counter!("nox_runner.transaction.result", "status" => "NOT_ACK").absolute(0);
-        counter!("nox_runner.transaction.result", "status" => "FAILURE").absolute(0);
-        self.queue_svc.init_metrics();
+        for chain_id in self.config.chains.keys() {
+            counter!("nox_runner.transaction.received", "chain_id" => chain_id.to_string())
+                .absolute(0);
+            counter!("nox_runner.transaction.result", "chain_id" => chain_id.to_string(), "status" => "SUCCESS").absolute(0);
+            counter!("nox_runner.transaction.result", "chain_id" => chain_id.to_string(), "status" => "NOT_ACK").absolute(0);
+            counter!("nox_runner.transaction.result", "chain_id" => chain_id.to_string(), "status" => "FAILURE").absolute(0);
+            self.queue_svc.init_metrics(chain_id);
+        }
 
         info!("entering main loop to receive messages from NATS JetStream");
         loop {
@@ -126,25 +129,25 @@ impl Application {
                                     continue;
                                 }
                             };
-                            counter!("nox_runner.transaction.received").increment(1);
-                            counter!("nox_runner.transaction.block_number").absolute(transaction_message.block_number);
+                            counter!("nox_runner.transaction.received", "chain_id" => transaction_message.chain_id.to_string()).increment(1);
+                            counter!("nox_runner.transaction.block_number", "chain_id" => transaction_message.chain_id.to_string()).absolute(transaction_message.block_number);
                             let transaction_hash = transaction_message.transaction_hash.clone();
-                            match self.queue_svc.handle_message(transaction_message).await {
+                            match self.queue_svc.handle_message(&transaction_message).await {
                                 Ok(_) => {
                                     info!(transaction_hash, "Compute PASS");
                                     match msg.ack().await {
                                         Ok(_) => {
-                                            counter!("nox_runner.transaction.result", "status" => "SUCCESS").increment(1);
+                                            counter!("nox_runner.transaction.result", "chain_id" => transaction_message.chain_id.to_string(), "status" => "SUCCESS").increment(1);
                                             info!(transaction_hash, "ACK sent")
                                         }
                                         Err(ack_err) => {
-                                            counter!("nox_runner.transaction.result", "status" => "NOT_ACK").increment(1);
+                                            counter!("nox_runner.transaction.result", "chain_id" => transaction_message.chain_id.to_string(), "status" => "NOT_ACK").increment(1);
                                             error!(transaction_hash, "ACK could not be sent {ack_err}")
                                         }
                                     };
                                 },
                                 Err(e) => {
-                                    counter!("nox_runner.transaction.result", "status" => "FAILURE").increment(1);
+                                    counter!("nox_runner.transaction.result", "chain_id" => transaction_message.chain_id.to_string(), "status" => "FAILURE").increment(1);
                                     error!(transaction_hash, "Compute FAIL {e}")
                                 }
                             }
