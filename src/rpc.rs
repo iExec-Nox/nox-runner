@@ -1,8 +1,8 @@
 //! This modules provides a service to interact with NoxCompute methods.
 
-use alloy_primitives::Address;
-use alloy_provider::RootProvider;
-use alloy_sol_types::sol;
+use alloy::primitives::Address;
+use alloy::providers::RootProvider;
+use alloy::sol;
 use k256::PublicKey;
 use tracing::error;
 

@@ -1,6 +1,6 @@
 //! Handle a [`TransactionMessage`] received through NATS.
 
-use alloy_primitives::{FixedBytes, hex, utils::Keccak256};
+use alloy::primitives::{FixedBytes, hex, utils::Keccak256};
 use axum_prometheus::metrics::counter;
 use serde::{Deserialize, Serialize};
 use strum::VariantNames;

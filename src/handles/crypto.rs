@@ -5,7 +5,7 @@ use aes_gcm::{
     Aes256Gcm, Nonce,
     aead::{Aead, KeyInit, generic_array::GenericArray},
 };
-use alloy_primitives::hex;
+use alloy::primitives::hex;
 use hkdf::Hkdf;
 use k256::{
     PublicKey,

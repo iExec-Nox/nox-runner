@@ -6,7 +6,7 @@
 
 use std::sync::atomic::{Ordering, compiler_fence};
 
-use alloy_primitives::{Signed, Uint, hex};
+use alloy::primitives::{Signed, Uint, hex};
 use tracing::error;
 use zeroize::Zeroize;
 
