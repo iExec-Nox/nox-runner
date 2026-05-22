@@ -3,14 +3,19 @@ use std::collections::HashMap;
 use alloy_primitives::{Address, hex};
 use alloy_signer_local::PrivateKeySigner;
 use axum::{Router, routing::get};
-use axum_prometheus::{Handle, MakeDefaultHandle, PrometheusMetricLayerBuilder, metrics::counter};
+use axum_prometheus::{
+    Handle, MakeDefaultHandle, PrometheusMetricLayerBuilder,
+    metrics::{counter, gauge},
+};
 use futures_util::StreamExt;
-use tracing::{error, info};
+use tokio::time::Instant;
+use tracing::{error, info, warn};
 
 use crate::config::Config;
 use crate::events::TransactionMessage;
 use crate::handlers;
 use crate::handles::{crypto::CryptoService, gateway::GatewayClient};
+use crate::nats::{ConnectionState, NatsClient};
 use crate::queue::QueueService;
 use crate::rpc::NoxClient;
 
@@ -61,8 +66,12 @@ impl Application {
     ///
     /// Received messages are deserialized as messages representing transactions.
     pub async fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let client = async_nats::connect(&self.config.nats.url).await?;
-        let jetstream = async_nats::jetstream::new(client);
+        let nats_client = NatsClient::connect(&self.config.nats)
+            .await
+            .map_err(|e| -> Box<dyn std::error::Error> { e.to_string().into() })?;
+        let jetstream = nats_client.jetstream();
+        let mut state_rx = nats_client.state_receiver();
+
         let stream = jetstream.get_stream(&self.config.nats.stream_name).await?;
         let consumer = stream
             .get_or_create_consumer(
@@ -108,14 +117,56 @@ impl Application {
             self.queue_svc.init_metrics(chain_id);
         }
 
+        gauge!("nox_runner.nats.connection_state").set(0.0);
+        counter!("nox_runner.nats.reconnects_total").absolute(0);
+        counter!("nox_runner.nats.paused_seconds").absolute(0);
+        for kind in ["timeout", "disconnect", "deserialize", "other"] {
+            counter!("nox_runner.nats.pull_errors_total", "kind" => kind).absolute(0);
+        }
+
+        let mut connected = *state_rx.borrow() == ConnectionState::Connected;
+        gauge!("nox_runner.nats.connection_state").set(if connected { 1.0 } else { 0.0 });
+        let mut disconnected_since: Option<Instant> = if connected {
+            None
+        } else {
+            Some(Instant::now())
+        };
+
         info!("entering main loop to receive messages from NATS JetStream");
         loop {
             tokio::select! {
                 _ = shutdown_signal() => {
                     info!("received shutdown signal, exiting gracefully...");
-                   break;
+                    break;
                 }
-                Some(message) = subscriber.next() => {
+
+                result = state_rx.changed() => {
+                    if result.is_ok() {
+                        let new_state = *state_rx.borrow();
+                        let was_connected = connected;
+                        connected = new_state == ConnectionState::Connected;
+
+                        gauge!("nox_runner.nats.connection_state").set(if connected { 1.0 } else { 0.0 });
+
+                        match (was_connected, connected) {
+                            (false, true) => {
+                                info!("NATS reconnected — resuming pull loop");
+                                counter!("nox_runner.nats.reconnects_total").increment(1);
+                                if let Some(t) = disconnected_since.take() {
+                                    counter!("nox_runner.nats.paused_seconds")
+                                        .increment(t.elapsed().as_secs());
+                                }
+                            }
+                            (true, false) => {
+                                warn!("NATS disconnected — pausing pull loop");
+                                disconnected_since = Some(Instant::now());
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+
+                Some(message) = subscriber.next(), if connected => {
                     match message {
                         Ok(msg) => {
                             let transaction_message = match serde_json::from_slice::<TransactionMessage>(&msg.payload) {
@@ -153,12 +204,29 @@ impl Application {
                             }
                             self.queue_svc.reset_cache();
                         },
-                        Err(e) => error!("Failed to pull message {e}"),
+                        Err(e) => {
+                            let kind = classify_pull_error(&e);
+                            counter!("nox_runner.nats.pull_errors_total", "kind" => kind).increment(1);
+                            error!("Failed to pull message {e}");
+                        }
                     }
                 }
             }
         }
         Ok(())
+    }
+}
+
+fn classify_pull_error<E: std::fmt::Display>(e: &E) -> &'static str {
+    let s = e.to_string().to_lowercase();
+    if s.contains("timed out") || s.contains("timeout") {
+        "timeout"
+    } else if s.contains("disconnect") || s.contains("connection") {
+        "disconnect"
+    } else if s.contains("serde") || s.contains("deserialize") || s.contains("invalid") {
+        "deserialize"
+    } else {
+        "other"
     }
 }
 
