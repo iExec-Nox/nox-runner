@@ -68,7 +68,7 @@ impl Application {
     pub async fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let nats_client = NatsClient::connect(&self.config.nats)
             .await
-            .map_err(|e| -> Box<dyn std::error::Error> { e.to_string().into() })?;
+            .map_err(|e| -> Box<dyn std::error::Error> { e })?;
         let jetstream = nats_client.jetstream();
         let mut state_rx = nats_client.state_receiver();
 
@@ -106,7 +106,11 @@ impl Application {
         let binding_address = self.config.binding_address();
         info!("starting TCP server listening on {binding_address}");
         let listener = tokio::net::TcpListener::bind(binding_address).await?;
-        tokio::spawn(async move { axum::serve(listener, app).await });
+        tokio::spawn(async move {
+            if let Err(e) = axum::serve(listener, app).await {
+                error!(error = %e, "HTTP server error");
+            }
+        });
 
         for chain_id in self.config.chains.keys() {
             let chain_id = chain_id.to_string();
@@ -119,7 +123,7 @@ impl Application {
 
         gauge!("nox_runner.nats.connection_state").set(0.0);
         counter!("nox_runner.nats.reconnects_total").absolute(0);
-        counter!("nox_runner.nats.paused_seconds").absolute(0);
+        counter!("nox_runner.nats.pause_duration_seconds_total").absolute(0);
         for kind in ["timeout", "disconnect", "deserialize", "other"] {
             counter!("nox_runner.nats.pull_errors_total", "kind" => kind).absolute(0);
         }
@@ -141,28 +145,30 @@ impl Application {
                 }
 
                 result = state_rx.changed() => {
-                    if result.is_ok() {
-                        let new_state = *state_rx.borrow();
-                        let was_connected = connected;
-                        connected = new_state == ConnectionState::Connected;
+                    if result.is_err() {
+                        warn!("NATS state watch channel closed — connection lost, exiting");
+                        break;
+                    }
+                    let new_state = *state_rx.borrow();
+                    let was_connected = connected;
+                    connected = new_state == ConnectionState::Connected;
 
-                        gauge!("nox_runner.nats.connection_state").set(if connected { 1.0 } else { 0.0 });
+                    gauge!("nox_runner.nats.connection_state").set(if connected { 1.0 } else { 0.0 });
 
-                        match (was_connected, connected) {
-                            (false, true) => {
-                                info!("NATS reconnected — resuming pull loop");
-                                counter!("nox_runner.nats.reconnects_total").increment(1);
-                                if let Some(t) = disconnected_since.take() {
-                                    counter!("nox_runner.nats.paused_seconds")
-                                        .increment(t.elapsed().as_secs());
-                                }
+                    match (was_connected, connected) {
+                        (false, true) => {
+                            info!("NATS reconnected — resuming pull loop");
+                            counter!("nox_runner.nats.reconnects_total").increment(1);
+                            if let Some(t) = disconnected_since.take() {
+                                counter!("nox_runner.nats.pause_duration_seconds_total")
+                                    .increment(t.elapsed().as_secs());
                             }
-                            (true, false) => {
-                                warn!("NATS disconnected — pausing pull loop");
-                                disconnected_since = Some(Instant::now());
-                            }
-                            _ => {}
                         }
+                        (true, false) => {
+                            warn!("NATS disconnected — pausing pull loop");
+                            disconnected_since = Some(Instant::now());
+                        }
+                        _ => {}
                     }
                 }
 
@@ -217,6 +223,7 @@ impl Application {
     }
 }
 
+// Classify async_nats error message text for informational metric label only
 fn classify_pull_error<E: std::fmt::Display>(e: &E) -> &'static str {
     let s = e.to_string().to_lowercase();
     if s.contains("timed out") || s.contains("timeout") {
