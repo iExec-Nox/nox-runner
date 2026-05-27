@@ -17,7 +17,7 @@ mod rpc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    rustls::crypto::ring::default_provider()
+    async_nats::rustls::crypto::ring::default_provider()
         .install_default()
         .unwrap_or_else(|_| error!("Failed to install rustls ring crypto provider"));
 

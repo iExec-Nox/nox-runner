@@ -51,7 +51,7 @@ The Runner is the off-chain computation layer of the Nox Protocol. It subscribes
 - Rust >= 1.85 (edition 2024)
 - Access to an Ethereum RPC endpoint with a deployed [NoxCompute](https://github.com/iExec-Nox/nox-protocol-contracts) contract
 - A running [nox-handle-gateway](https://github.com/iExec-Nox/nox-handle-gateway) instance
-- A running NATS server with JetStream enabled and a stream populated by [nox-ingestor](https://github.com/iExec-Nox/nox-ingestor)
+- A running NATS server (or cluster) with JetStream enabled and a stream populated by [nox-ingestor](https://github.com/iExec-Nox/nox-ingestor). mTLS client credentials are required unless TLS is disabled (see Environment Variables)
 
 ---
 
@@ -66,7 +66,15 @@ export NOX_RUNNER_WALLET_KEY="0x..."
 export NOX_RUNNER_CHAINS__<CHAIN_ID>__RPC_URL="https://..."
 export NOX_RUNNER_CHAINS__<CHAIN_ID>__NOX_COMPUTE_CONTRACT_ADDRESS="0x..."
 export NOX_RUNNER_HANDLE_GATEWAY_URL="https://..."
-export NOX_RUNNER_NATS_URL="nats://..."
+export NOX_RUNNER_NATS__URLS="nats://...,nats://..."
+
+# NATS mTLS is enabled by default. Either provide the client certificate
+# material as PEM content...
+export NOX_RUNNER_NATS__TLS__CA="$(cat ca.pem)"
+export NOX_RUNNER_NATS__TLS__CERT="$(cat client-cert.pem)"
+export NOX_RUNNER_NATS__TLS__KEY="$(cat client-key.pem)"
+# ...or disable TLS to connect to a plain NATS server (dev only):
+# export NOX_RUNNER_NATS__TLS__ENABLED="false"
 
 # Build and run
 cargo run --release
@@ -89,7 +97,11 @@ Configuration is loaded from environment variables with the `NOX_RUNNER_` prefix
 | `NOX_RUNNER_SERVER__PORT` | Port for the HTTP server | No | `8080` |
 | `NOX_RUNNER_CHAINS__<CHAIN_ID>__RPC_URL` | Ethereum RPC endpoint for reading the `NoxCompute` contract | No | `http://localhost:8545` |
 | `NOX_RUNNER_CHAINS__<CHAIN_ID>__NOX_COMPUTE_CONTRACT_ADDRESS` | `NoxCompute` contract address | No | `0x0000...0000` |
-| `NOX_RUNNER_NATS__URL` | NATS server URL | No | `nats://localhost:4222` |
+| `NOX_RUNNER_NATS__URLS` | NATS server URLs (comma-separated for a cluster) | **Yes** | — |
+| `NOX_RUNNER_NATS__TLS__ENABLED` | Enable mTLS to NATS. Set `false` for a plain dev server | No | `true` |
+| `NOX_RUNNER_NATS__TLS__CA` | CA certificate PEM content. Required when TLS enabled | If TLS | — |
+| `NOX_RUNNER_NATS__TLS__CERT` | Client certificate PEM content. Required when TLS enabled | If TLS | — |
+| `NOX_RUNNER_NATS__TLS__KEY` | Client private key PEM content. Required when TLS enabled | If TLS | — |
 | `NOX_RUNNER_NATS__STREAM_NAME` | Name of the JetStream stream to consume | No | `nox_ingestor` |
 | `NOX_RUNNER_NATS__CONSUMER_NAME` | Durable consumer name | No | `nox_ingestor_consumer` |
 | `NOX_RUNNER_NATS__CONSUMER_MAX_DELIVER` | Maximum redelivery attempts per message | No | `10` |

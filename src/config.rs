@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
 
 use alloy_primitives::{Address, hex};
 use config::{Config as ConfigBuilder, ConfigError, Environment};
@@ -22,9 +21,13 @@ pub struct ChainConfig {
 
 #[derive(Deserialize, Validate)]
 pub struct TlsConfig {
-    pub ca_path: PathBuf,
-    pub cert_path: PathBuf,
-    pub key_path: PathBuf,
+    pub enabled: bool,
+    #[serde(default)]
+    pub ca: String,
+    #[serde(default)]
+    pub cert: String,
+    #[serde(default)]
+    pub key: String,
 }
 
 #[derive(Deserialize, Validate)]
@@ -63,6 +66,10 @@ impl Config {
             .set_default("server.host", "127.0.0.1")?
             .set_default("server.port", "8080")?
             .set_default("handle_gateway_url", "http://localhost:3000")?
+            .set_default("nats.tls.enabled", true)?
+            .set_default("nats.tls.ca", "")?
+            .set_default("nats.tls.cert", "")?
+            .set_default("nats.tls.key", "")?
             .set_default("nats.stream_name", "nox_ingestor")?
             .set_default("nats.consumer_name", "nox_ingestor_consumer")?
             .set_default("nats.consumer_max_deliver", 10)?
@@ -133,13 +140,8 @@ mod tests {
     use std::str::FromStr;
     use validator::ValidationErrors;
 
-    const TLS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/.claude/tests/config/tls");
-
     #[test]
     fn check_config() {
-        let ca = format!("{TLS_DIR}/ca.pem");
-        let cert = format!("{TLS_DIR}/runner-client.pem");
-        let key = format!("{TLS_DIR}/runner-client-key.pem");
         temp_env::with_vars(
             [
                 (
@@ -158,9 +160,10 @@ mod tests {
                     "NOX_RUNNER_NATS__URLS",
                     Some("nats://localhost:4221,nats://localhost:4222,nats://localhost:4223"),
                 ),
-                ("NOX_RUNNER_NATS__TLS__CA_PATH", Some(ca.as_str())),
-                ("NOX_RUNNER_NATS__TLS__CERT_PATH", Some(cert.as_str())),
-                ("NOX_RUNNER_NATS__TLS__KEY_PATH", Some(key.as_str())),
+                ("NOX_RUNNER_NATS__TLS__ENABLED", Some("true")),
+                ("NOX_RUNNER_NATS__TLS__CA", Some("ca-pem")),
+                ("NOX_RUNNER_NATS__TLS__CERT", Some("cert-pem")),
+                ("NOX_RUNNER_NATS__TLS__KEY", Some("key-pem")),
             ],
             || {
                 let config = Config::load().expect("should load");
@@ -171,9 +174,42 @@ mod tests {
                     config.chains[&31337].nox_compute_contract_address
                 );
                 assert_eq!(3, config.nats.urls.len());
-                assert_eq!(PathBuf::from(&ca), config.nats.tls.ca_path);
-                assert_eq!(PathBuf::from(&cert), config.nats.tls.cert_path);
-                assert_eq!(PathBuf::from(&key), config.nats.tls.key_path);
+                assert!(config.nats.tls.enabled);
+                assert_eq!("ca-pem", config.nats.tls.ca);
+                assert_eq!("cert-pem", config.nats.tls.cert);
+                assert_eq!("key-pem", config.nats.tls.key);
+            },
+        )
+    }
+
+    #[test]
+    fn check_config_tls_disabled_by_default_material() {
+        temp_env::with_vars(
+            [
+                (
+                    "NOX_RUNNER_CHAINS__31337__RPC_URL",
+                    Some("http://localhost:8545"),
+                ),
+                (
+                    "NOX_RUNNER_CHAINS__31337__NOX_COMPUTE_CONTRACT_ADDRESS",
+                    Some("0x0A59a4e1F7f740CD6474312AfFC1446fA9B5ad9B"),
+                ),
+                (
+                    "NOX_RUNNER_WALLET_KEY",
+                    Some("0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
+                ),
+                (
+                    "NOX_RUNNER_NATS__URLS",
+                    Some("tls://nats-1.internal,nats://nats-2.internal"),
+                ),
+                ("NOX_RUNNER_NATS__TLS__ENABLED", Some("false")),
+            ],
+            || {
+                let config = Config::load().expect("should load");
+                config.validate().expect("should validate");
+                assert_eq!(2, config.nats.urls.len());
+                assert!(!config.nats.tls.enabled);
+                assert_eq!("", config.nats.tls.ca);
             },
         )
     }
@@ -191,9 +227,7 @@ mod tests {
                     "NOX_RUNNER_NATS__URLS",
                     Some("nats://localhost:4221,nats://localhost:4222"),
                 ),
-                ("NOX_RUNNER_NATS__TLS__CA_PATH", Some("/tmp/ca.pem")),
-                ("NOX_RUNNER_NATS__TLS__CERT_PATH", Some("/tmp/cert.pem")),
-                ("NOX_RUNNER_NATS__TLS__KEY_PATH", Some("/tmp/key.pem")),
+                ("NOX_RUNNER_NATS__TLS__ENABLED", Some("false")),
                 ("NOX_RUNNER_NATS__MAX_ACK_PENDING", Some("500")),
                 ("NOX_RUNNER_NATS__MAX_BATCH", Some("500")),
                 ("NOX_RUNNER_WALLET_KEY", Some("0x")),
@@ -210,44 +244,23 @@ mod tests {
 
     #[test]
     fn check_invalid_nats_urls_empty() {
-        temp_env::with_vars(
-            [
-                (
-                    "NOX_RUNNER_CHAINS__31337__RPC_URL",
-                    Some("http://localhost:8545"),
-                ),
-                (
-                    "NOX_RUNNER_CHAINS__31337__NOX_COMPUTE_CONTRACT_ADDRESS",
-                    Some("0x0A59a4e1F7f740CD6474312AfFC1446fA9B5ad9B"),
-                ),
-                (
-                    "NOX_RUNNER_WALLET_KEY",
-                    Some("0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
-                ),
-                ("NOX_RUNNER_NATS__URLS", Some("nats://localhost:4221")),
-                ("NOX_RUNNER_NATS__TLS__CA_PATH", Some("/tmp/ca.pem")),
-                ("NOX_RUNNER_NATS__TLS__CERT_PATH", Some("/tmp/cert.pem")),
-                ("NOX_RUNNER_NATS__TLS__KEY_PATH", Some("/tmp/key.pem")),
-            ],
-            || {
-                let nats_config = NatsConfig {
-                    urls: vec![],
-                    tls: TlsConfig {
-                        ca_path: PathBuf::from("/tmp/ca.pem"),
-                        cert_path: PathBuf::from("/tmp/cert.pem"),
-                        key_path: PathBuf::from("/tmp/key.pem"),
-                    },
-                    stream_name: "nox_ingestor".to_string(),
-                    consumer_name: "nox_ingestor_consumer".to_string(),
-                    consumer_max_deliver: 10,
-                    max_ack_pending: 10,
-                    max_batch: 10,
-                };
-                let result = nats_config.validate();
-                assert!(result.is_err());
-                assert!(ValidationErrors::has_error(&result, "urls"));
+        let nats_config = NatsConfig {
+            urls: vec![],
+            tls: TlsConfig {
+                enabled: false,
+                ca: String::new(),
+                cert: String::new(),
+                key: String::new(),
             },
-        )
+            stream_name: "nox_ingestor".to_string(),
+            consumer_name: "nox_ingestor_consumer".to_string(),
+            consumer_max_deliver: 10,
+            max_ack_pending: 10,
+            max_batch: 10,
+        };
+        let result = nats_config.validate();
+        assert!(result.is_err());
+        assert!(ValidationErrors::has_error(&result, "urls"));
     }
 
     #[test]
