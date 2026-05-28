@@ -68,3 +68,101 @@ pub fn select(
         ),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloy_primitives::{Signed, Uint};
+
+    #[test]
+    fn compare_eq_same_uint16_values() {
+        let a = SolidityValue::Uint16(Uint::<16, 1>::from(42_u16));
+        let b = SolidityValue::Uint16(Uint::<16, 1>::from(42_u16));
+        assert!(compare(Operator::Eq, a, b).unwrap());
+    }
+
+    #[test]
+    fn compare_eq_different_uint16_values() {
+        let a = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
+        let b = SolidityValue::Uint16(Uint::<16, 1>::from(20_u16));
+        assert!(!compare(Operator::Eq, a, b).unwrap());
+    }
+
+    #[test]
+    fn compare_gt_greater() {
+        let a = SolidityValue::Uint16(Uint::<16, 1>::from(20_u16));
+        let b = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
+        assert!(compare(Operator::Gt, a, b).unwrap());
+    }
+
+    #[test]
+    fn compare_gt_equal_is_false() {
+        let a = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
+        let b = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
+        assert!(!compare(Operator::Gt, a, b).unwrap());
+    }
+
+    #[test]
+    fn compare_ge_equal_is_true() {
+        let a = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
+        let b = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
+        assert!(compare(Operator::Ge, a, b).unwrap());
+    }
+
+    #[test]
+    fn compare_lt_lesser() {
+        let a = SolidityValue::Uint16(Uint::<16, 1>::from(5_u16));
+        let b = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
+        assert!(compare(Operator::Lt, a, b).unwrap());
+    }
+
+    #[test]
+    fn compare_le_equal_is_true() {
+        let a = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
+        let b = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
+        assert!(compare(Operator::Le, a, b).unwrap());
+    }
+
+    #[test]
+    fn compare_int16_negative_values() {
+        use std::str::FromStr;
+        let a = SolidityValue::Int16(Signed::<16, 1>::from_str("-5").unwrap());
+        let b = SolidityValue::Int16(Signed::<16, 1>::from_str("5").unwrap());
+        assert!(compare(Operator::Lt, a, b).unwrap());
+    }
+
+    #[test]
+    fn compare_mismatched_types_returns_error() {
+        let a = SolidityValue::Uint16(Uint::<16, 1>::from(1_u16));
+        let b = SolidityValue::Uint256(Uint::<256, 4>::from(1_u64));
+        let result = compare(Operator::Eq, a, b);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn select_returns_if_true_when_condition_is_true() {
+        let cond = SolidityValue::Boolean(true);
+        let yes = SolidityValue::Uint16(Uint::<16, 1>::from(1_u16));
+        let no = SolidityValue::Uint16(Uint::<16, 1>::from(0_u16));
+        let result = select(cond, yes.clone(), no).unwrap();
+        assert_eq!(result, yes);
+    }
+
+    #[test]
+    fn select_returns_if_false_when_condition_is_false() {
+        let cond = SolidityValue::Boolean(false);
+        let yes = SolidityValue::Uint16(Uint::<16, 1>::from(1_u16));
+        let no = SolidityValue::Uint16(Uint::<16, 1>::from(0_u16));
+        let result = select(cond, yes, no.clone()).unwrap();
+        assert_eq!(result, no);
+    }
+
+    #[test]
+    fn select_with_non_boolean_condition_returns_error() {
+        let cond = SolidityValue::Uint16(Uint::<16, 1>::from(1_u16));
+        let yes = SolidityValue::Uint16(Uint::<16, 1>::from(1_u16));
+        let no = SolidityValue::Uint16(Uint::<16, 1>::from(0_u16));
+        let result = select(cond, yes, no);
+        assert!(result.is_err());
+    }
+}

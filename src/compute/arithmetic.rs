@@ -355,4 +355,83 @@ mod tests {
             SolidityValue::Int16(Signed::<16, 1>::from_str("-2").unwrap())
         );
     }
+
+    #[test]
+    fn check_uint16_mul() {
+        let a = SolidityValue::Uint16(Uint::<16, 1>::from(3_u16));
+        let b = SolidityValue::Uint16(Uint::<16, 1>::from(4_u16));
+        let result = compute(Operator::Mul, a, b).unwrap();
+        assert_eq!(result, SolidityValue::Uint16(Uint::<16, 1>::from(12_u16)));
+    }
+
+    #[test]
+    fn check_uint256_mul() {
+        let a = SolidityValue::Uint256(Uint::<256, 4>::from(100_u64));
+        let b = SolidityValue::Uint256(Uint::<256, 4>::from(200_u64));
+        let result = compute(Operator::Mul, a, b).unwrap();
+        assert_eq!(
+            result,
+            SolidityValue::Uint256(Uint::<256, 4>::from(20_000_u64))
+        );
+    }
+
+    #[test]
+    fn check_uint16_div_by_zero_returns_max() {
+        let a = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
+        let b = SolidityValue::Uint16(Uint::<16, 1>::ZERO);
+        let result = compute(Operator::Div, a, b).unwrap();
+        assert_eq!(result, SolidityValue::Uint16(Uint::<16, 1>::MAX));
+    }
+
+    #[test]
+    fn check_int16_div_by_zero_returns_max() {
+        let a = SolidityValue::Int16(Signed::<16, 1>::from_str("100").unwrap());
+        let b = SolidityValue::Int16(Signed::<16, 1>::ZERO);
+        let result = compute(Operator::Div, a, b).unwrap();
+        assert_eq!(result, SolidityValue::Int16(Signed::<16, 1>::MAX));
+    }
+
+    #[test]
+    fn check_safe_compute_no_overflow() {
+        let a = SolidityValue::Uint16(Uint::<16, 1>::from(1_u16));
+        let b = SolidityValue::Uint16(Uint::<16, 1>::from(2_u16));
+        let (success, result) = safe_compute(Operator::Add, a, b).unwrap();
+        assert!(success);
+        assert_eq!(result, SolidityValue::Uint16(Uint::<16, 1>::from(3_u16)));
+    }
+
+    #[test]
+    fn check_safe_compute_overflow_returns_false_and_zero() {
+        let a = SolidityValue::Uint16(Uint::<16, 1>::MAX);
+        let b = SolidityValue::Uint16(Uint::<16, 1>::from(1_u16));
+        let (success, result) = safe_compute(Operator::Add, a, b).unwrap();
+        assert!(!success);
+        assert_eq!(result, SolidityValue::Uint16(Uint::<16, 1>::ZERO));
+    }
+
+    #[test]
+    fn check_safe_compute_sub_underflow_returns_false_and_zero() {
+        let a = SolidityValue::Uint16(Uint::<16, 1>::ZERO);
+        let b = SolidityValue::Uint16(Uint::<16, 1>::from(1_u16));
+        let (success, result) = safe_compute(Operator::Sub, a, b).unwrap();
+        assert!(!success);
+        assert_eq!(result, SolidityValue::Uint16(Uint::<16, 1>::ZERO));
+    }
+
+    #[test]
+    fn check_safe_compute_div_by_zero_returns_false_and_zero() {
+        let a = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
+        let b = SolidityValue::Uint16(Uint::<16, 1>::ZERO);
+        let (success, result) = safe_compute(Operator::Div, a, b).unwrap();
+        assert!(!success);
+        assert_eq!(result, SolidityValue::Uint16(Uint::<16, 1>::ZERO));
+    }
+
+    #[test]
+    fn check_mismatched_types_returns_error() {
+        let a = SolidityValue::Uint16(Uint::<16, 1>::from(1_u16));
+        let b = SolidityValue::Uint256(Uint::<256, 4>::from(1_u64));
+        let result = compute(Operator::Add, a, b);
+        assert!(result.is_err());
+    }
 }

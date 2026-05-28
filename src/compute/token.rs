@@ -117,3 +117,113 @@ pub fn burn(
         )),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloy_primitives::Uint;
+
+    fn u256(n: u64) -> SolidityValue {
+        SolidityValue::Uint256(Uint::<256, 4>::from(n))
+    }
+
+    #[test]
+    fn transfer_valid_reduces_from_and_increases_to() {
+        let (success, from, to) = transfer(u256(100), u256(50), u256(30)).unwrap();
+        assert_eq!(success, SolidityValue::Boolean(true));
+        assert_eq!(from, u256(70));
+        assert_eq!(to, u256(80));
+    }
+
+    #[test]
+    fn transfer_zero_amount_is_valid() {
+        let (success, from, to) = transfer(u256(100), u256(50), u256(0)).unwrap();
+        assert_eq!(success, SolidityValue::Boolean(true));
+        assert_eq!(from, u256(100));
+        assert_eq!(to, u256(50));
+    }
+
+    #[test]
+    fn transfer_exact_balance_is_valid() {
+        let (success, from, to) = transfer(u256(50), u256(0), u256(50)).unwrap();
+        assert_eq!(success, SolidityValue::Boolean(true));
+        assert_eq!(from, u256(0));
+        assert_eq!(to, u256(50));
+    }
+
+    #[test]
+    fn transfer_insufficient_balance_returns_false_and_original_values() {
+        let (success, from, to) = transfer(u256(10), u256(50), u256(50)).unwrap();
+        assert_eq!(success, SolidityValue::Boolean(false));
+        assert_eq!(from, u256(10));
+        assert_eq!(to, u256(50));
+    }
+
+    #[test]
+    fn transfer_wrong_type_returns_error() {
+        let result = transfer(SolidityValue::Boolean(true), u256(50), u256(10));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn mint_increases_balance_and_total_supply() {
+        let (success, balance, supply) = mint(u256(100), u256(50), u256(1000)).unwrap();
+        assert_eq!(success, SolidityValue::Boolean(true));
+        assert_eq!(balance, u256(150));
+        assert_eq!(supply, u256(1050));
+    }
+
+    #[test]
+    fn mint_zero_amount_is_valid() {
+        let (success, balance, supply) = mint(u256(100), u256(0), u256(1000)).unwrap();
+        assert_eq!(success, SolidityValue::Boolean(true));
+        assert_eq!(balance, u256(100));
+        assert_eq!(supply, u256(1000));
+    }
+
+    #[test]
+    fn mint_overflow_returns_false_and_original_values() {
+        let max_amount = SolidityValue::Uint256(Uint::<256, 4>::MAX);
+        // supply overflow: MAX + 1 → fails
+        let (success, balance, supply) = mint(u256(0), max_amount, u256(1)).unwrap();
+        assert_eq!(success, SolidityValue::Boolean(false));
+        assert_eq!(balance, u256(0));
+        assert_eq!(supply, u256(1));
+    }
+
+    #[test]
+    fn mint_wrong_type_returns_error() {
+        let result = mint(SolidityValue::Boolean(false), u256(50), u256(1000));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn burn_decreases_balance_and_total_supply() {
+        let (success, balance, supply) = burn(u256(100), u256(30), u256(1000)).unwrap();
+        assert_eq!(success, SolidityValue::Boolean(true));
+        assert_eq!(balance, u256(70));
+        assert_eq!(supply, u256(970));
+    }
+
+    #[test]
+    fn burn_exact_balance_is_valid() {
+        let (success, balance, supply) = burn(u256(50), u256(50), u256(1000)).unwrap();
+        assert_eq!(success, SolidityValue::Boolean(true));
+        assert_eq!(balance, u256(0));
+        assert_eq!(supply, u256(950));
+    }
+
+    #[test]
+    fn burn_insufficient_balance_returns_false_and_original_values() {
+        let (success, balance, supply) = burn(u256(10), u256(50), u256(1000)).unwrap();
+        assert_eq!(success, SolidityValue::Boolean(false));
+        assert_eq!(balance, u256(10));
+        assert_eq!(supply, u256(1000));
+    }
+
+    #[test]
+    fn burn_wrong_type_returns_error() {
+        let result = burn(SolidityValue::Boolean(false), u256(50), u256(1000));
+        assert!(result.is_err());
+    }
+}
