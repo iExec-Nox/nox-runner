@@ -11,11 +11,16 @@ mod config;
 mod events;
 mod handlers;
 mod handles;
+mod nats;
 mod queue;
 mod rpc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    async_nats::rustls::crypto::ring::default_provider()
+        .install_default()
+        .unwrap_or_else(|_| error!("Failed to install rustls ring crypto provider"));
+
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
 
