@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
-use alloy_primitives::{Address, hex};
-use alloy_signer_local::PrivateKeySigner;
+use alloy::{
+    primitives::{Address, hex},
+    signers::local::PrivateKeySigner,
+};
 use axum::{Router, routing::get};
 use axum_prometheus::{
     Handle, MakeDefaultHandle, PrometheusMetricLayerBuilder,
