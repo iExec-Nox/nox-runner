@@ -104,6 +104,30 @@ impl NatsClient {
     }
 }
 
+/// Normalizes a PEM string that may have been collapsed into a single line.
+///
+/// Handles two common inline injection patterns:
+/// - Spaces replacing newlines: `"-----BEGIN CERTIFICATE----- MIIFxx... -----END CERTIFICATE-----"`
+/// - Literal `\n` sequences from env vars or YAML double-quoted strings
+fn normalize_pem(pem: &str) -> String {
+    // Resolve literal \n sequences (env var injection)
+    let pem = pem.replace("\\n", "\n");
+    // If already has proper newlines after markers, return as-is
+    if pem.contains("-----\n") {
+        return pem;
+    }
+    // Restore newlines around PEM section markers
+    // Base64 alphabet has no spaces, so replacing ` -----`/`----- ` is unambiguous
+    let normalized = pem
+        .replace("----- ", "-----\n")
+        .replace(" -----", "\n-----");
+    if normalized.ends_with('\n') {
+        normalized
+    } else {
+        normalized + "\n"
+    }
+}
+
 /// Build an in-memory rustls `ClientConfig` from PEM strings supplied via env vars.
 fn build_rustls_client_config(
     tls: &TlsConfig,
@@ -118,30 +142,33 @@ fn build_rustls_client_config(
         }
     }
 
+    let ca = normalize_pem(&tls.ca);
+    let cert = normalize_pem(&tls.cert);
+    let key = normalize_pem(&tls.key);
+
     let mut roots = RootCertStore::empty();
-    for cert in CertificateDer::pem_slice_iter(tls.ca.as_bytes()) {
-        let cert = cert.map_err(|e| format!("Failed to parse CA PEM: {e}"))?;
+    for cert_der in CertificateDer::pem_slice_iter(ca.as_bytes()) {
+        let cert_der = cert_der.map_err(|e| format!("Failed to parse CA PEM: {e}"))?;
         roots
-            .add(cert)
+            .add(cert_der)
             .map_err(|e| format!("Failed to add CA cert to root store: {e}"))?;
     }
     if roots.is_empty() {
         return Err("No CA certificates found in PEM content".into());
     }
 
-    let cert_chain: Vec<CertificateDer<'static>> =
-        CertificateDer::pem_slice_iter(tls.cert.as_bytes())
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| format!("Failed to parse client cert PEM: {e}"))?;
+    let cert_chain: Vec<CertificateDer<'static>> = CertificateDer::pem_slice_iter(cert.as_bytes())
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Failed to parse client cert PEM: {e}"))?;
     if cert_chain.is_empty() {
         return Err("No client certificates found in PEM content".into());
     }
 
-    let key = PrivateKeyDer::from_pem_slice(tls.key.as_bytes())
+    let private_key = PrivateKeyDer::from_pem_slice(key.as_bytes())
         .map_err(|e| format!("Failed to parse client key PEM: {e}"))?;
 
     ClientConfig::builder()
         .with_root_certificates(roots)
-        .with_client_auth_cert(cert_chain, key)
+        .with_client_auth_cert(cert_chain, private_key)
         .map_err(|e| format!("Failed to build rustls client config: {e}").into())
 }
