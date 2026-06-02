@@ -113,7 +113,7 @@ fn normalize_pem(pem: &str) -> String {
     // Resolve literal \n sequences (env var injection)
     let pem = pem.replace("\\n", "\n");
     // If already has proper newlines after markers, return as-is
-    if pem.contains("-----\n") {
+    if pem.contains("-----\n") && pem.contains("\n-----") {
         return pem;
     }
     // Restore newlines around PEM section markers
