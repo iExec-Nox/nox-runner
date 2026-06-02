@@ -4,10 +4,12 @@
 //! See [`super::crypto`] for ECIES related operations.
 use std::collections::HashMap;
 
-use alloy_primitives::{Address, FixedBytes, U256, hex};
-use alloy_signer::{Signature, SignerSync};
-use alloy_signer_local::PrivateKeySigner;
-use alloy_sol_types::{SolStruct, eip712_domain, sol};
+use alloy::{
+    primitives::{Address, FixedBytes, U256, hex},
+    signers::{Signature, SignerSync, local::PrivateKeySigner},
+    sol,
+    sol_types::{SolStruct, eip712_domain},
+};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use reqwest::{
     Client,
@@ -32,7 +34,7 @@ pub enum GatewayError {
     #[error("Failed to create AUTHORIZATION header")]
     InvalidHeaderValue(#[from] reqwest::header::InvalidHeaderValue),
     #[error(transparent)]
-    SignatureError(#[from] alloy_signer::Error),
+    SignatureError(#[from] alloy::signers::Error),
     #[error("Unknown Handle Gateway: {0}")]
     UnknownHandleGateway(String),
 }
