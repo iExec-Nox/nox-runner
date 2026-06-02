@@ -119,7 +119,11 @@ fn normalize_pem(pem: &str) -> String {
         .replace("----- ", "-----\n")
         .replace(" -----", "\n-----");
     // Trim trailing whitespace per line to handle multiple adjacent spaces (e.g. "body  -----END").
-    let trimmed = normalized.lines().map(str::trim_end).collect::<Vec<_>>().join("\n");
+    let trimmed = normalized
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n");
     trimmed + "\n"
 }
 
