@@ -1,6 +1,6 @@
 //! Structs to deserialize received [`TransactionMessage`]s.
 
-use alloy_primitives::Address;
+use alloy::primitives::Address;
 use serde::Deserialize;
 use strum_macros::VariantNames;
 
