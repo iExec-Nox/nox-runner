@@ -75,7 +75,7 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
-    use alloy_primitives::{Signed, Uint};
+    use alloy::primitives::{Signed, Uint};
 
     #[test]
     fn compare_returns_correct_result_for_all_operator_and_type_combinations() {

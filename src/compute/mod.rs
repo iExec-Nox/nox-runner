@@ -133,7 +133,7 @@ pub fn get_solidity_type_size(solidity_type: u8) -> Result<usize, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloy_primitives::{Signed, Uint};
+    use alloy::primitives::{Signed, Uint};
 
     // --- from_bytes ---
 

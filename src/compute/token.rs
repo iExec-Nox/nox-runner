@@ -121,7 +121,7 @@ pub fn burn(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloy_primitives::Uint;
+    use alloy::primitives::Uint;
 
     fn u256(n: u64) -> SolidityValue {
         SolidityValue::Uint256(Uint::<256, 4>::from(n))

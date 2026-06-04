@@ -221,7 +221,7 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
-    use alloy_primitives::hex;
+    use alloy::primitives::hex;
 
     fn hex_decode(hex_str: &str) -> [u8; 32] {
         let trimmed = hex_str.trim_start_matches("0x");
