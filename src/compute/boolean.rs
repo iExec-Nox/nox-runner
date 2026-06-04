@@ -75,56 +75,56 @@ mod tests {
     use alloy_primitives::{Signed, Uint};
 
     #[test]
-    fn compare_eq_same_uint16_values() {
+    fn compare_returns_true_when_uint16_values_are_equal() {
         let a = SolidityValue::Uint16(Uint::<16, 1>::from(42_u16));
         let b = SolidityValue::Uint16(Uint::<16, 1>::from(42_u16));
         assert!(compare(Operator::Eq, a, b).unwrap());
     }
 
     #[test]
-    fn compare_eq_different_uint16_values() {
+    fn compare_returns_false_when_uint16_values_differ() {
         let a = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
         let b = SolidityValue::Uint16(Uint::<16, 1>::from(20_u16));
         assert!(!compare(Operator::Eq, a, b).unwrap());
     }
 
     #[test]
-    fn compare_gt_greater() {
+    fn compare_returns_true_for_gt_when_left_is_greater() {
         let a = SolidityValue::Uint16(Uint::<16, 1>::from(20_u16));
         let b = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
         assert!(compare(Operator::Gt, a, b).unwrap());
     }
 
     #[test]
-    fn compare_gt_equal_is_false() {
+    fn compare_returns_false_for_gt_when_values_are_equal() {
         let a = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
         let b = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
         assert!(!compare(Operator::Gt, a, b).unwrap());
     }
 
     #[test]
-    fn compare_ge_equal_is_true() {
+    fn compare_returns_true_for_ge_when_values_are_equal() {
         let a = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
         let b = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
         assert!(compare(Operator::Ge, a, b).unwrap());
     }
 
     #[test]
-    fn compare_lt_lesser() {
+    fn compare_returns_true_for_lt_when_left_is_less() {
         let a = SolidityValue::Uint16(Uint::<16, 1>::from(5_u16));
         let b = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
         assert!(compare(Operator::Lt, a, b).unwrap());
     }
 
     #[test]
-    fn compare_le_equal_is_true() {
+    fn compare_returns_true_for_le_when_values_are_equal() {
         let a = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
         let b = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
         assert!(compare(Operator::Le, a, b).unwrap());
     }
 
     #[test]
-    fn compare_int16_negative_values() {
+    fn compare_returns_true_for_lt_when_int16_left_is_negative() {
         use std::str::FromStr;
         let a = SolidityValue::Int16(Signed::<16, 1>::from_str("-5").unwrap());
         let b = SolidityValue::Int16(Signed::<16, 1>::from_str("5").unwrap());
@@ -132,7 +132,7 @@ mod tests {
     }
 
     #[test]
-    fn compare_mismatched_types_returns_error() {
+    fn compare_returns_error_when_types_mismatch() {
         let a = SolidityValue::Uint16(Uint::<16, 1>::from(1_u16));
         let b = SolidityValue::Uint256(Uint::<256, 4>::from(1_u64));
         let result = compare(Operator::Eq, a, b);
@@ -158,7 +158,7 @@ mod tests {
     }
 
     #[test]
-    fn select_with_non_boolean_condition_returns_error() {
+    fn select_returns_error_when_condition_is_not_boolean() {
         let cond = SolidityValue::Uint16(Uint::<16, 1>::from(1_u16));
         let yes = SolidityValue::Uint16(Uint::<16, 1>::from(1_u16));
         let no = SolidityValue::Uint16(Uint::<16, 1>::from(0_u16));

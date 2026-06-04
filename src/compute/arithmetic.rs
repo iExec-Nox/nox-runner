@@ -234,7 +234,7 @@ mod tests {
     }
 
     #[test]
-    fn check_uint16() {
+    fn compute_succeeds_for_uint16_add_sub_and_div() {
         let left_hand_value = hex_decode("0x0200");
         let right_hand_value = hex_decode("0x0100");
         let left_hand_operand = SolidityValue::from_bytes(5_u8, left_hand_value).unwrap();
@@ -272,7 +272,7 @@ mod tests {
     }
 
     #[test]
-    fn check_uint256() {
+    fn compute_wraps_for_uint256_when_add_and_sub_overflow() {
         let left_hand_value =
             hex_decode("0x8000000000000000000000000000000000000000000000000000000000000000");
         let right_hand_value =
@@ -317,7 +317,7 @@ mod tests {
     }
 
     #[test]
-    fn check_int16() {
+    fn compute_succeeds_for_int16_add_sub_and_div() {
         let left_hand_value = hex_decode("0xFE00");
         let right_hand_value = hex_decode("0x0100");
         let left_hand_operand = SolidityValue::from_bytes(37_u8, left_hand_value)
@@ -357,7 +357,7 @@ mod tests {
     }
 
     #[test]
-    fn check_uint16_mul() {
+    fn compute_returns_product_for_uint16_mul() {
         let a = SolidityValue::Uint16(Uint::<16, 1>::from(3_u16));
         let b = SolidityValue::Uint16(Uint::<16, 1>::from(4_u16));
         let result = compute(Operator::Mul, a, b).unwrap();
@@ -365,7 +365,7 @@ mod tests {
     }
 
     #[test]
-    fn check_uint256_mul() {
+    fn compute_returns_product_for_uint256_mul() {
         let a = SolidityValue::Uint256(Uint::<256, 4>::from(100_u64));
         let b = SolidityValue::Uint256(Uint::<256, 4>::from(200_u64));
         let result = compute(Operator::Mul, a, b).unwrap();
@@ -376,7 +376,7 @@ mod tests {
     }
 
     #[test]
-    fn check_uint16_div_by_zero_returns_max() {
+    fn compute_returns_max_when_uint16_div_by_zero() {
         let a = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
         let b = SolidityValue::Uint16(Uint::<16, 1>::ZERO);
         let result = compute(Operator::Div, a, b).unwrap();
@@ -384,7 +384,7 @@ mod tests {
     }
 
     #[test]
-    fn check_int16_div_by_zero_returns_max() {
+    fn compute_returns_max_when_int16_div_by_zero() {
         let a = SolidityValue::Int16(Signed::<16, 1>::from_str("100").unwrap());
         let b = SolidityValue::Int16(Signed::<16, 1>::ZERO);
         let result = compute(Operator::Div, a, b).unwrap();
@@ -392,7 +392,7 @@ mod tests {
     }
 
     #[test]
-    fn check_safe_compute_no_overflow() {
+    fn safe_compute_returns_true_and_result_when_no_overflow() {
         let a = SolidityValue::Uint16(Uint::<16, 1>::from(1_u16));
         let b = SolidityValue::Uint16(Uint::<16, 1>::from(2_u16));
         let (success, result) = safe_compute(Operator::Add, a, b).unwrap();
@@ -401,7 +401,7 @@ mod tests {
     }
 
     #[test]
-    fn check_safe_compute_overflow_returns_false_and_zero() {
+    fn safe_compute_returns_false_and_zero_when_add_overflows() {
         let a = SolidityValue::Uint16(Uint::<16, 1>::MAX);
         let b = SolidityValue::Uint16(Uint::<16, 1>::from(1_u16));
         let (success, result) = safe_compute(Operator::Add, a, b).unwrap();
@@ -410,7 +410,7 @@ mod tests {
     }
 
     #[test]
-    fn check_safe_compute_sub_underflow_returns_false_and_zero() {
+    fn safe_compute_returns_false_and_zero_when_sub_underflow() {
         let a = SolidityValue::Uint16(Uint::<16, 1>::ZERO);
         let b = SolidityValue::Uint16(Uint::<16, 1>::from(1_u16));
         let (success, result) = safe_compute(Operator::Sub, a, b).unwrap();
@@ -419,7 +419,7 @@ mod tests {
     }
 
     #[test]
-    fn check_safe_compute_div_by_zero_returns_false_and_zero() {
+    fn safe_compute_returns_false_and_zero_when_div_by_zero() {
         let a = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
         let b = SolidityValue::Uint16(Uint::<16, 1>::ZERO);
         let (success, result) = safe_compute(Operator::Div, a, b).unwrap();
@@ -428,7 +428,7 @@ mod tests {
     }
 
     #[test]
-    fn check_mismatched_types_returns_error() {
+    fn compute_returns_error_when_types_mismatch() {
         let a = SolidityValue::Uint16(Uint::<16, 1>::from(1_u16));
         let b = SolidityValue::Uint256(Uint::<256, 4>::from(1_u64));
         let result = compute(Operator::Add, a, b);

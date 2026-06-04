@@ -138,13 +138,13 @@ mod tests {
     // --- from_bytes ---
 
     #[test]
-    fn from_bytes_boolean_false_when_all_zeros() {
+    fn from_bytes_returns_boolean_false_when_all_zeros() {
         let result = SolidityValue::from_bytes(0_u8, [0u8; 32]).unwrap();
         assert_eq!(result, SolidityValue::Boolean(false));
     }
 
     #[test]
-    fn from_bytes_boolean_true_when_not_all_zeros() {
+    fn from_bytes_returns_boolean_true_when_not_all_zeros() {
         let mut bytes = [0u8; 32];
         bytes[31] = 1;
         let result = SolidityValue::from_bytes(0_u8, bytes).unwrap();
@@ -152,16 +152,16 @@ mod tests {
     }
 
     #[test]
-    fn from_bytes_uint16() {
+    fn from_bytes_returns_uint16_when_type_byte_is_5() {
         let mut bytes = [0u8; 32];
         bytes[30] = 0x00;
-        bytes[31] = 0x05; // valeur 5 en uint16
+        bytes[31] = 0x05;
         let result = SolidityValue::from_bytes(5_u8, bytes).unwrap();
         assert_eq!(result, SolidityValue::Uint16(Uint::<16, 1>::from(5_u16)));
     }
 
     #[test]
-    fn from_bytes_uint256() {
+    fn from_bytes_returns_uint256_when_type_byte_is_35() {
         let mut bytes = [0u8; 32];
         bytes[31] = 0xFF;
         let result = SolidityValue::from_bytes(35_u8, bytes).unwrap();
@@ -172,10 +172,10 @@ mod tests {
     }
 
     #[test]
-    fn from_bytes_int16() {
+    fn from_bytes_returns_int16_when_type_byte_is_37() {
         let mut bytes = [0u8; 32];
         bytes[30] = 0x00;
-        bytes[31] = 0x0A; // valeur 10 en int16
+        bytes[31] = 0x0A;
         let result = SolidityValue::from_bytes(37_u8, bytes).unwrap();
         assert_eq!(
             result,
@@ -184,7 +184,7 @@ mod tests {
     }
 
     #[test]
-    fn from_bytes_unsupported_type_returns_error() {
+    fn from_bytes_returns_error_when_type_is_unsupported() {
         let result = SolidityValue::from_bytes(99_u8, [0u8; 32]);
         assert!(result.is_err());
     }
@@ -201,13 +201,13 @@ mod tests {
     }
 
     #[test]
-    fn to_bytes_boolean_false_all_zeros() {
+    fn to_bytes_returns_all_zeros_when_boolean_is_false() {
         let val = SolidityValue::Boolean(false);
         assert_eq!(val.to_bytes(), [0u8; 32]);
     }
 
     #[test]
-    fn from_bytes_to_bytes_roundtrip_uint16() {
+    fn from_bytes_to_bytes_roundtrip_succeeds_for_uint16() {
         let mut original = [0u8; 32];
         original[31] = 42;
         let val = SolidityValue::from_bytes(5_u8, original).unwrap();
@@ -215,7 +215,7 @@ mod tests {
     }
 
     #[test]
-    fn from_bytes_to_bytes_roundtrip_uint256() {
+    fn from_bytes_to_bytes_roundtrip_succeeds_for_uint256() {
         let mut original = [0u8; 32];
         original[31] = 0xFF;
         let val = SolidityValue::from_bytes(35_u8, original).unwrap();
@@ -226,14 +226,13 @@ mod tests {
 
     #[test]
     fn get_solidity_type_from_handle_extracts_byte_at_position_5() {
-        // handle hex de 32 bytes : le byte à l'index 5 vaut 0x23 = 35 (Uint256)
         let handle = "0x0000000000230000000000000000000000000000000000000000000000000000";
         let result = get_solidity_type_from_handle(handle).unwrap();
         assert_eq!(result, 35_u8);
     }
 
     #[test]
-    fn get_solidity_type_from_handle_invalid_hex_returns_error() {
+    fn get_solidity_type_from_handle_returns_error_when_hex_is_invalid() {
         let result = get_solidity_type_from_handle("not_hex");
         assert!(result.is_err());
     }
@@ -263,7 +262,7 @@ mod tests {
     }
 
     #[test]
-    fn get_solidity_type_size_unsupported_returns_error() {
+    fn get_solidity_type_size_returns_error_when_type_is_unsupported() {
         assert!(get_solidity_type_size(200).is_err());
     }
 }
