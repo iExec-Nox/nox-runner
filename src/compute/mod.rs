@@ -207,19 +207,40 @@ mod tests {
     }
 
     #[test]
-    fn from_bytes_to_bytes_roundtrip_succeeds_for_uint16() {
-        let mut original = [0u8; 32];
-        original[31] = 42;
-        let val = SolidityValue::from_bytes(5_u8, original).unwrap();
-        assert_eq!(val.to_bytes(), original);
-    }
-
-    #[test]
-    fn from_bytes_to_bytes_roundtrip_succeeds_for_uint256() {
-        let mut original = [0u8; 32];
-        original[31] = 0xFF;
-        let val = SolidityValue::from_bytes(35_u8, original).unwrap();
-        assert_eq!(val.to_bytes(), original);
+    fn from_bytes_to_bytes_roundtrip_succeeds_for_all_supported_types() {
+        // (type_byte, 32-byte input chosen to exercise all significant bits)
+        let cases: &[(u8, [u8; 32])] = &[
+            (5_u8, {
+                let mut b = [0u8; 32];
+                b[30] = 0x80;
+                b
+            }), // uint16: 0x8000 — both bytes
+            (35_u8, {
+                let mut b = [0u8; 32];
+                b[31] = 0xFF;
+                b
+            }), // uint256: non-zero last byte
+            (37_u8, {
+                let mut b = [0u8; 32];
+                b[30] = 0x80;
+                b[31] = 0x01;
+                b
+            }), // int16: 0x8001 = -32767
+            (67_u8, {
+                let mut b = [0u8; 32];
+                b[0] = 0x7F;
+                b[31] = 0xFF;
+                b
+            }), // int256: both ends
+        ];
+        for (type_byte, original) in cases {
+            let val = SolidityValue::from_bytes(*type_byte, *original).unwrap();
+            assert_eq!(
+                val.to_bytes(),
+                *original,
+                "roundtrip failed for type_byte={type_byte}"
+            );
+        }
     }
 
     // --- get_solidity_type_from_handle ---
@@ -240,25 +261,22 @@ mod tests {
     // --- get_solidity_type_size ---
 
     #[test]
-    fn get_solidity_type_size_boolean_is_1_byte() {
-        assert_eq!(get_solidity_type_size(0).unwrap(), 1);
-    }
-
-    #[test]
-    fn get_solidity_type_size_address_is_20_bytes() {
-        assert_eq!(get_solidity_type_size(1).unwrap(), 20);
-    }
-
-    #[test]
-    fn get_solidity_type_size_uint16_is_2_bytes() {
-        // type_byte=5 → 5 - 3 = 2
-        assert_eq!(get_solidity_type_size(5).unwrap(), 2);
-    }
-
-    #[test]
-    fn get_solidity_type_size_uint256_is_32_bytes() {
-        // type_byte=35 → 35 - 3 = 32
-        assert_eq!(get_solidity_type_size(35).unwrap(), 32);
+    fn get_solidity_type_size_returns_expected_size_for_all_supported_types() {
+        let cases = [
+            (0_u8, 1_usize),   // boolean
+            (1_u8, 20_usize),  // address
+            (5_u8, 2_usize),   // uint16:  5  - 3  = 2
+            (35_u8, 32_usize), // uint256: 35 - 3  = 32
+            (37_u8, 2_usize),  // int16:   37 - 35 = 2
+            (67_u8, 32_usize), // int256:  67 - 35 = 32
+        ];
+        for (type_byte, expected_size) in cases {
+            assert_eq!(
+                get_solidity_type_size(type_byte).unwrap(),
+                expected_size,
+                "wrong size for type_byte={type_byte}"
+            );
+        }
     }
 
     #[test]

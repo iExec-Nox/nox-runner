@@ -127,6 +127,10 @@ mod tests {
         SolidityValue::Uint256(Uint::<256, 4>::from(n))
     }
 
+    fn u256_max() -> SolidityValue {
+        SolidityValue::Uint256(Uint::<256, 4>::MAX)
+    }
+
     #[test]
     fn transfer_reduces_from_and_increases_to_when_balance_is_sufficient() {
         let (success, from, to) = transfer(u256(100), u256(50), u256(30)).unwrap();
@@ -157,6 +161,24 @@ mod tests {
         assert_eq!(success, SolidityValue::Boolean(false));
         assert_eq!(from, u256(10));
         assert_eq!(to, u256(50));
+    }
+
+    #[test]
+    fn transfer_returns_false_and_original_values_when_to_balance_overflows() {
+        // from = 100 - 1 = 99 → ok; to = MAX + 1 → overflow
+        let (success, from, to) = transfer(u256(100), u256_max(), u256(1)).unwrap();
+        assert_eq!(success, SolidityValue::Boolean(false));
+        assert_eq!(from, u256(100));
+        assert_eq!(to, u256_max());
+    }
+
+    #[test]
+    fn transfer_returns_false_and_original_values_when_both_conditions_fail() {
+        // from = 0 - 1 → underflow; to = MAX + 1 → overflow
+        let (success, from, to) = transfer(u256(0), u256_max(), u256(1)).unwrap();
+        assert_eq!(success, SolidityValue::Boolean(false));
+        assert_eq!(from, u256(0));
+        assert_eq!(to, u256_max());
     }
 
     #[test]
@@ -192,6 +214,24 @@ mod tests {
     }
 
     #[test]
+    fn mint_returns_false_and_original_values_when_balance_overflows() {
+        // balance = MAX + 1 → overflow; supply = 0 + 1 = 1 → ok
+        let (success, balance, supply) = mint(u256_max(), u256(1), u256(0)).unwrap();
+        assert_eq!(success, SolidityValue::Boolean(false));
+        assert_eq!(balance, u256_max());
+        assert_eq!(supply, u256(0));
+    }
+
+    #[test]
+    fn mint_returns_false_and_original_values_when_both_overflow() {
+        // balance = MAX + 1 → overflow; supply = MAX + 1 → overflow
+        let (success, balance, supply) = mint(u256_max(), u256(1), u256_max()).unwrap();
+        assert_eq!(success, SolidityValue::Boolean(false));
+        assert_eq!(balance, u256_max());
+        assert_eq!(supply, u256_max());
+    }
+
+    #[test]
     fn mint_returns_error_when_type_is_wrong() {
         let result = mint(SolidityValue::Boolean(false), u256(50), u256(1000));
         assert!(result.is_err());
@@ -219,6 +259,24 @@ mod tests {
         assert_eq!(success, SolidityValue::Boolean(false));
         assert_eq!(balance, u256(10));
         assert_eq!(supply, u256(1000));
+    }
+
+    #[test]
+    fn burn_returns_false_and_original_values_when_supply_underflows() {
+        // balance = 100 - 50 = 50 → ok; supply = 30 - 50 → underflow
+        let (success, balance, supply) = burn(u256(100), u256(50), u256(30)).unwrap();
+        assert_eq!(success, SolidityValue::Boolean(false));
+        assert_eq!(balance, u256(100));
+        assert_eq!(supply, u256(30));
+    }
+
+    #[test]
+    fn burn_returns_false_and_original_values_when_both_underflow() {
+        // balance = 10 - 50 → underflow; supply = 30 - 50 → underflow
+        let (success, balance, supply) = burn(u256(10), u256(50), u256(30)).unwrap();
+        assert_eq!(success, SolidityValue::Boolean(false));
+        assert_eq!(balance, u256(10));
+        assert_eq!(supply, u256(30));
     }
 
     #[test]

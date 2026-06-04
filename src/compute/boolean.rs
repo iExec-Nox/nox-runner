@@ -3,6 +3,7 @@
 use super::SolidityValue;
 
 /// Supported boolean operators.
+#[derive(Clone, Copy)]
 pub enum Operator {
     Eq,
     Ne,
@@ -71,64 +72,44 @@ pub fn select(
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
     use alloy_primitives::{Signed, Uint};
 
     #[test]
-    fn compare_returns_true_when_uint16_values_are_equal() {
-        let a = SolidityValue::Uint16(Uint::<16, 1>::from(42_u16));
-        let b = SolidityValue::Uint16(Uint::<16, 1>::from(42_u16));
-        assert!(compare(Operator::Eq, a, b).unwrap());
-    }
+    fn compare_returns_correct_result_for_all_operator_and_type_combinations() {
+        let u16 = |n: u16| SolidityValue::Uint16(Uint::<16, 1>::from(n));
+        let u256 = |n: u64| SolidityValue::Uint256(Uint::<256, 4>::from(n));
+        let i16 = |s: &str| SolidityValue::Int16(Signed::<16, 1>::from_str(s).unwrap());
+        let i256 = |s: &str| SolidityValue::Int256(Signed::<256, 4>::from_str(s).unwrap());
 
-    #[test]
-    fn compare_returns_false_when_uint16_values_differ() {
-        let a = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
-        let b = SolidityValue::Uint16(Uint::<16, 1>::from(20_u16));
-        assert!(!compare(Operator::Eq, a, b).unwrap());
-    }
-
-    #[test]
-    fn compare_returns_true_for_gt_when_left_is_greater() {
-        let a = SolidityValue::Uint16(Uint::<16, 1>::from(20_u16));
-        let b = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
-        assert!(compare(Operator::Gt, a, b).unwrap());
-    }
-
-    #[test]
-    fn compare_returns_false_for_gt_when_values_are_equal() {
-        let a = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
-        let b = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
-        assert!(!compare(Operator::Gt, a, b).unwrap());
-    }
-
-    #[test]
-    fn compare_returns_true_for_ge_when_values_are_equal() {
-        let a = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
-        let b = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
-        assert!(compare(Operator::Ge, a, b).unwrap());
-    }
-
-    #[test]
-    fn compare_returns_true_for_lt_when_left_is_less() {
-        let a = SolidityValue::Uint16(Uint::<16, 1>::from(5_u16));
-        let b = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
-        assert!(compare(Operator::Lt, a, b).unwrap());
-    }
-
-    #[test]
-    fn compare_returns_true_for_le_when_values_are_equal() {
-        let a = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
-        let b = SolidityValue::Uint16(Uint::<16, 1>::from(10_u16));
-        assert!(compare(Operator::Le, a, b).unwrap());
-    }
-
-    #[test]
-    fn compare_returns_true_for_lt_when_int16_left_is_negative() {
-        use std::str::FromStr;
-        let a = SolidityValue::Int16(Signed::<16, 1>::from_str("-5").unwrap());
-        let b = SolidityValue::Int16(Signed::<16, 1>::from_str("5").unwrap());
-        assert!(compare(Operator::Lt, a, b).unwrap());
+        let cases: &[(Operator, SolidityValue, SolidityValue, bool)] = &[
+            // --- Uint16 ---
+            (Operator::Eq, u16(42), u16(42), true),
+            (Operator::Eq, u16(10), u16(20), false),
+            (Operator::Ne, u16(10), u16(20), true),
+            (Operator::Ne, u16(42), u16(42), false),
+            (Operator::Gt, u16(20), u16(10), true),
+            (Operator::Gt, u16(10), u16(10), false),
+            (Operator::Ge, u16(10), u16(10), true),
+            (Operator::Lt, u16(5), u16(10), true),
+            (Operator::Le, u16(10), u16(10), true),
+            // --- Int16 (negative values) ---
+            (Operator::Lt, i16("-5"), i16("5"), true),
+            // --- Uint256 ---
+            (Operator::Eq, u256(1_000_000), u256(1_000_000), true),
+            (Operator::Ne, u256(1), u256(2), true),
+            (Operator::Gt, u256(200), u256(100), true),
+            (Operator::Lt, u256(100), u256(200), true),
+            // --- Int256 (negative values) ---
+            (Operator::Eq, i256("-42"), i256("-42"), true),
+            (Operator::Ne, i256("-1"), i256("1"), true),
+            (Operator::Lt, i256("-1000"), i256("1000"), true),
+        ];
+        for (op, a, b, expected) in cases {
+            assert_eq!(compare(*op, a.clone(), b.clone()).unwrap(), *expected,);
+        }
     }
 
     #[test]
