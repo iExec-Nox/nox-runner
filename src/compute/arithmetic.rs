@@ -1,7 +1,7 @@
 //! Arithmetic operations support.
 
 use super::SolidityValue;
-use alloy_primitives::{Signed, Uint};
+use alloy::primitives::{Signed, Uint};
 
 /// Supported arithmetic operators.
 #[derive(Clone, Copy)]
