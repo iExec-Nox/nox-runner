@@ -107,8 +107,8 @@ mod tests {
             (Operator::Ne, i256("-1"), i256("1"), true),
             (Operator::Lt, i256("-1000"), i256("1000"), true),
         ];
-        for (op, a, b, expected) in cases {
-            assert_eq!(compare(*op, a.clone(), b.clone()).unwrap(), *expected,);
+        for (i, (op, a, b, expected)) in cases.iter().enumerate() {
+            assert_eq!(compare(*op, a.clone(), b.clone()).unwrap(), *expected, "case {i}");
         }
     }
 

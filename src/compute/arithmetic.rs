@@ -400,8 +400,8 @@ mod tests {
                 SolidityValue::Int256(Signed::<256, 4>::MAX),
             ),
         ];
-        for (a, b, expected) in cases {
-            assert_eq!(compute(Operator::Div, a, b).unwrap(), expected);
+        for (i, (a, b, expected)) in cases.into_iter().enumerate() {
+            assert_eq!(compute(Operator::Div, a, b).unwrap(), expected, "case {i}");
         }
     }
 
@@ -421,10 +421,10 @@ mod tests {
                 SolidityValue::Int256(Signed::<256, 4>::from_str("30").unwrap()),
             ),
         ];
-        for (op, a, b, expected) in cases {
+        for (i, (op, a, b, expected)) in cases.into_iter().enumerate() {
             let (success, result) = safe_compute(op, a, b).unwrap();
-            assert!(success);
-            assert_eq!(result, expected);
+            assert!(success, "case {i}");
+            assert_eq!(result, expected, "case {i}");
         }
     }
 
@@ -468,10 +468,10 @@ mod tests {
                 SolidityValue::Int256(Signed::<256, 4>::ZERO),
             ),
         ];
-        for (op, a, b, expected_zero) in cases {
+        for (i, (op, a, b, expected_zero)) in cases.into_iter().enumerate() {
             let (success, result) = safe_compute(op, a, b).unwrap();
-            assert!(!success);
-            assert_eq!(result, expected_zero);
+            assert!(!success, "case {i}");
+            assert_eq!(result, expected_zero, "case {i}");
         }
     }
 
