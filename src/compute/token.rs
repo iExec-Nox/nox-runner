@@ -215,7 +215,7 @@ mod tests {
 
     #[test]
     fn mint_returns_false_and_original_values_when_balance_overflows() {
-        // balance = MAX + 1 → overflow; supply = 0 + 1 = 1 → ok
+        // balance(MAX) + amount(1) → overflow; supply returns original value (0)
         let (success, balance, supply) = mint(u256_max(), u256(1), u256(0)).unwrap();
         assert_eq!(success, SolidityValue::Boolean(false));
         assert_eq!(balance, u256_max());
