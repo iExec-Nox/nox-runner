@@ -1,6 +1,6 @@
 //! Advanced operations on confidential tokens
 //!
-//! Atomic operations are secured by using [`alloy_primitives::Uint::checked_add`] and [`alloy_primitives::Uint::checked_sub`] operations.
+//! Atomic operations are secured by using [`alloy::primitives::Uint::checked_add`] and [`alloy::primitives::Uint::checked_sub`] operations.
 
 use super::SolidityValue;
 
