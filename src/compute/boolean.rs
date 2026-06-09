@@ -95,17 +95,27 @@ mod tests {
             (Operator::Ge, u16(10), u16(10), true),
             (Operator::Lt, u16(5), u16(10), true),
             (Operator::Le, u16(10), u16(10), true),
-            // --- Int16 (negative values) ---
+            // --- Int16 ---
+            (Operator::Eq, i16("5"), i16("5"), true),
+            (Operator::Ne, i16("-1"), i16("1"), true),
+            (Operator::Ge, i16("5"), i16("5"), true),
+            (Operator::Gt, i16("10"), i16("5"), true),
             (Operator::Lt, i16("-5"), i16("5"), true),
+            (Operator::Le, i16("5"), i16("5"), true),
             // --- Uint256 ---
             (Operator::Eq, u256(1_000_000), u256(1_000_000), true),
             (Operator::Ne, u256(1), u256(2), true),
+            (Operator::Ge, u256(100), u256(100), true),
             (Operator::Gt, u256(200), u256(100), true),
             (Operator::Lt, u256(100), u256(200), true),
-            // --- Int256 (negative values) ---
+            (Operator::Le, u256(50), u256(100), true),
+            // --- Int256 ---
             (Operator::Eq, i256("-42"), i256("-42"), true),
             (Operator::Ne, i256("-1"), i256("1"), true),
+            (Operator::Ge, i256("10"), i256("10"), true),
+            (Operator::Gt, i256("100"), i256("50"), true),
             (Operator::Lt, i256("-1000"), i256("1000"), true),
+            (Operator::Le, i256("-5"), i256("0"), true),
         ];
         for (i, (op, a, b, expected)) in cases.iter().enumerate() {
             assert_eq!(compare(*op, a.clone(), b.clone()).unwrap(), *expected, "case {i}");
