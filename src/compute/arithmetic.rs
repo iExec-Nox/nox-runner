@@ -444,6 +444,12 @@ mod tests {
                 SolidityValue::Uint16(Uint::<16, 1>::ZERO),
             ),
             (
+                Operator::Mul,
+                SolidityValue::Uint16(Uint::<16, 1>::MAX),
+                SolidityValue::Uint16(Uint::<16, 1>::from(2_u16)),
+                SolidityValue::Uint16(Uint::<16, 1>::ZERO),
+            ),
+            (
                 Operator::Div,
                 SolidityValue::Uint16(Uint::<16, 1>::from(10_u16)),
                 SolidityValue::Uint16(Uint::<16, 1>::ZERO),
@@ -459,6 +465,12 @@ mod tests {
                 Operator::Sub,
                 SolidityValue::Int256(Signed::<256, 4>::MIN),
                 SolidityValue::Int256(Signed::<256, 4>::from_str("1").unwrap()),
+                SolidityValue::Int256(Signed::<256, 4>::ZERO),
+            ),
+            (
+                Operator::Mul,
+                SolidityValue::Int256(Signed::<256, 4>::MAX),
+                SolidityValue::Int256(Signed::<256, 4>::from_str("2").unwrap()),
                 SolidityValue::Int256(Signed::<256, 4>::ZERO),
             ),
             (
