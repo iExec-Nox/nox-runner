@@ -416,9 +416,93 @@ mod tests {
             ),
             (
                 Operator::Add,
+                SolidityValue::Uint256(Uint::<256, 4>::from(10_u64)),
+                SolidityValue::Uint256(Uint::<256, 4>::from(20_u64)),
+                SolidityValue::Uint256(Uint::<256, 4>::from(30_u64)),
+            ),
+            (
+                Operator::Add,
+                SolidityValue::Int16(Signed::<16, 1>::from_str("5").unwrap()),
+                SolidityValue::Int16(Signed::<16, 1>::from_str("3").unwrap()),
+                SolidityValue::Int16(Signed::<16, 1>::from_str("8").unwrap()),
+            ),
+            (
+                Operator::Add,
                 SolidityValue::Int256(Signed::<256, 4>::from_str("10").unwrap()),
                 SolidityValue::Int256(Signed::<256, 4>::from_str("20").unwrap()),
                 SolidityValue::Int256(Signed::<256, 4>::from_str("30").unwrap()),
+            ),
+            (
+                Operator::Sub,
+                SolidityValue::Uint16(Uint::<16, 1>::from(10_u16)),
+                SolidityValue::Uint16(Uint::<16, 1>::from(3_u16)),
+                SolidityValue::Uint16(Uint::<16, 1>::from(7_u16)),
+            ),
+            (
+                Operator::Sub,
+                SolidityValue::Uint256(Uint::<256, 4>::from(100_u64)),
+                SolidityValue::Uint256(Uint::<256, 4>::from(30_u64)),
+                SolidityValue::Uint256(Uint::<256, 4>::from(70_u64)),
+            ),
+            (
+                Operator::Sub,
+                SolidityValue::Int16(Signed::<16, 1>::from_str("10").unwrap()),
+                SolidityValue::Int16(Signed::<16, 1>::from_str("3").unwrap()),
+                SolidityValue::Int16(Signed::<16, 1>::from_str("7").unwrap()),
+            ),
+            (
+                Operator::Sub,
+                SolidityValue::Int256(Signed::<256, 4>::from_str("100").unwrap()),
+                SolidityValue::Int256(Signed::<256, 4>::from_str("30").unwrap()),
+                SolidityValue::Int256(Signed::<256, 4>::from_str("70").unwrap()),
+            ),
+            (
+                Operator::Mul,
+                SolidityValue::Uint16(Uint::<16, 1>::from(3_u16)),
+                SolidityValue::Uint16(Uint::<16, 1>::from(4_u16)),
+                SolidityValue::Uint16(Uint::<16, 1>::from(12_u16)),
+            ),
+            (
+                Operator::Mul,
+                SolidityValue::Uint256(Uint::<256, 4>::from(5_u64)),
+                SolidityValue::Uint256(Uint::<256, 4>::from(6_u64)),
+                SolidityValue::Uint256(Uint::<256, 4>::from(30_u64)),
+            ),
+            (
+                Operator::Mul,
+                SolidityValue::Int16(Signed::<16, 1>::from_str("3").unwrap()),
+                SolidityValue::Int16(Signed::<16, 1>::from_str("4").unwrap()),
+                SolidityValue::Int16(Signed::<16, 1>::from_str("12").unwrap()),
+            ),
+            (
+                Operator::Mul,
+                SolidityValue::Int256(Signed::<256, 4>::from_str("5").unwrap()),
+                SolidityValue::Int256(Signed::<256, 4>::from_str("6").unwrap()),
+                SolidityValue::Int256(Signed::<256, 4>::from_str("30").unwrap()),
+            ),
+            (
+                Operator::Div,
+                SolidityValue::Uint16(Uint::<16, 1>::from(10_u16)),
+                SolidityValue::Uint16(Uint::<16, 1>::from(2_u16)),
+                SolidityValue::Uint16(Uint::<16, 1>::from(5_u16)),
+            ),
+            (
+                Operator::Div,
+                SolidityValue::Uint256(Uint::<256, 4>::from(100_u64)),
+                SolidityValue::Uint256(Uint::<256, 4>::from(4_u64)),
+                SolidityValue::Uint256(Uint::<256, 4>::from(25_u64)),
+            ),
+            (
+                Operator::Div,
+                SolidityValue::Int16(Signed::<16, 1>::from_str("10").unwrap()),
+                SolidityValue::Int16(Signed::<16, 1>::from_str("2").unwrap()),
+                SolidityValue::Int16(Signed::<16, 1>::from_str("5").unwrap()),
+            ),
+            (
+                Operator::Div,
+                SolidityValue::Int256(Signed::<256, 4>::from_str("100").unwrap()),
+                SolidityValue::Int256(Signed::<256, 4>::from_str("4").unwrap()),
+                SolidityValue::Int256(Signed::<256, 4>::from_str("25").unwrap()),
             ),
         ];
         for (i, (op, a, b, expected)) in cases.into_iter().enumerate() {
