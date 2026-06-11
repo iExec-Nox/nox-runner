@@ -404,24 +404,26 @@ impl QueueService {
         let missing_operand_handles = self
             .handles_cache
             .find_handles_not_in_cache(operand_handles);
-        let encrypted_operands = self
-            .handle_gateway
-            .get_handles(
-                metadata.chain_id,
-                metadata.block_number,
-                metadata.caller,
-                metadata.transaction_hash.clone(),
-                self.crypto_svc.public.clone(),
-                missing_operand_handles,
-            )
-            .await
-            .map_err(|e| format!("Failed to fetch operands from handle gateway: {e}"))?;
-        for encrypted_operand in encrypted_operands {
-            match self.decrypt_and_format_operand(&encrypted_operand) {
-                Ok(operand) => self
-                    .handles_cache
-                    .add_handle(&encrypted_operand.handle, operand),
-                Err(e) => error!("Operand decryption failure: {e}"),
+        if !missing_operand_handles.is_empty() {
+            let encrypted_operands = self
+                .handle_gateway
+                .get_handles(
+                    metadata.chain_id,
+                    metadata.block_number,
+                    metadata.caller,
+                    metadata.transaction_hash.clone(),
+                    self.crypto_svc.public.clone(),
+                    missing_operand_handles,
+                )
+                .await
+                .map_err(|e| format!("Failed to fetch operands from handle gateway: {e}"))?;
+            for encrypted_operand in encrypted_operands {
+                match self.decrypt_and_format_operand(&encrypted_operand) {
+                    Ok(operand) => self
+                        .handles_cache
+                        .add_handle(&encrypted_operand.handle, operand),
+                    Err(e) => error!("Operand decryption failure: {e}"),
+                }
             }
         }
         let operands = self.handles_cache.read_handles(operand_handles);
