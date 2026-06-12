@@ -21,6 +21,7 @@ use serde_json::json;
 use thiserror::Error;
 use tracing::{error, info, warn};
 
+use crate::config::HandleGatewayConfig;
 use crate::queue::{OperandEntry, ResultEntry};
 
 /// EIP-712 domain name for Handle Gateway interactions.
@@ -121,14 +122,17 @@ pub struct GatewayClient {
 
 impl GatewayClient {
     pub async fn new(
-        url: &str,
+        config: &HandleGatewayConfig,
         handle_gateway_addresses: HashMap<u32, Address>,
         signer: PrivateKeySigner,
     ) -> Result<Self, reqwest::Error> {
-        let client = Client::builder().build()?;
+        let client = Client::builder()
+            .connect_timeout(config.connect_timeout)
+            .timeout(config.timeout)
+            .build()?;
         Ok(Self {
             client,
-            url: url.to_string(),
+            url: config.url.clone(),
             handle_gateway_addresses,
             signer,
         })
