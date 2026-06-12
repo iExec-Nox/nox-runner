@@ -1,4 +1,6 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
+use std::time::Duration;
 
 use alloy::primitives::{Address, hex};
 use config::{Config as ConfigBuilder, ConfigError, Environment};
@@ -17,6 +19,18 @@ pub struct ChainConfig {
     pub rpc_url: String,
     #[validate(custom(function = "validate_nox_compute_contract_address"))]
     pub nox_compute_contract_address: Address,
+}
+
+#[derive(Deserialize, Validate)]
+pub struct HandleGatewayConfig {
+    #[validate(url)]
+    pub url: String,
+    #[serde(with = "humantime_serde")]
+    #[validate(custom(function = "validate_timeout"))]
+    pub connect_timeout: Duration,
+    #[serde(with = "humantime_serde")]
+    #[validate(custom(function = "validate_timeout"))]
+    pub timeout: Duration,
 }
 
 #[derive(Deserialize, Validate)]
@@ -54,8 +68,8 @@ pub struct Config {
     pub chains: HashMap<u32, ChainConfig>,
     #[validate(nested)]
     pub nats: NatsConfig,
-    #[validate(url)]
-    pub handle_gateway_url: String,
+    #[validate(nested)]
+    pub handle_gateway: HandleGatewayConfig,
     #[validate(custom(function = "validate_wallet_key"))]
     pub wallet_key: String,
 }
@@ -65,7 +79,9 @@ impl Config {
         let config = ConfigBuilder::builder()
             .set_default("server.host", "127.0.0.1")?
             .set_default("server.port", "8080")?
-            .set_default("handle_gateway_url", "http://localhost:3000")?
+            .set_default("handle_gateway.url", "http://localhost:3000")?
+            .set_default("handle_gateway.connect_timeout", "15s")?
+            .set_default("handle_gateway.timeout", "15s")?
             .set_default("nats.tls.enabled", true)?
             .set_default("nats.tls.ca", "")?
             .set_default("nats.tls.cert", "")?
@@ -116,6 +132,20 @@ fn validate_nox_compute_contract_address(
         return Err(ValidationError::new(
             "NoxCompute contract address should not be zero address",
         ));
+    }
+    Ok(())
+}
+
+fn validate_timeout(value: &Duration) -> Result<(), ValidationError> {
+    if *value == Duration::ZERO {
+        let err =
+            ValidationError::new("timeout_zero").with_message(Cow::from("must be greater than 0"));
+        return Err(err);
+    }
+    if *value > Duration::from_secs(60) {
+        let err =
+            ValidationError::new("timeout_too_large").with_message(Cow::from("must not exceed 60"));
+        return Err(err);
     }
     Ok(())
 }

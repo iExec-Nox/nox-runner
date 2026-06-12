@@ -58,8 +58,7 @@ impl Application {
         wallet_key_bytes.copy_from_slice(&hex::decode(&config.wallet_key)?);
         let signer = PrivateKeySigner::from_bytes(&wallet_key_bytes.into())?;
         let handle_gateway =
-            GatewayClient::new(&config.handle_gateway_url, handle_gateway_addresses, signer)
-                .await?;
+            GatewayClient::new(&config.handle_gateway, handle_gateway_addresses, signer).await?;
         let queue_svc = QueueService::new(crypto_svc, handle_gateway);
         Ok(Application { config, queue_svc })
     }
