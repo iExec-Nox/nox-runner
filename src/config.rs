@@ -80,7 +80,7 @@ impl Config {
             .set_default("server.host", "127.0.0.1")?
             .set_default("server.port", "8080")?
             .set_default("handle_gateway.url", "http://localhost:3000")?
-            .set_default("handle_gateway.connect_timeout", "15s")?
+            .set_default("handle_gateway.connect_timeout", "3s")?
             .set_default("handle_gateway.timeout", "15s")?
             .set_default("nats.tls.enabled", true)?
             .set_default("nats.tls.ca", "")?
