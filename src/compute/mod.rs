@@ -129,3 +129,158 @@ pub fn get_solidity_type_size(solidity_type: u8) -> Result<usize, String> {
     };
     Ok(solidity_type_size as usize)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloy::primitives::{Signed, Uint};
+
+    // --- from_bytes ---
+
+    #[test]
+    fn from_bytes_returns_boolean_false_when_all_zeros() {
+        let result = SolidityValue::from_bytes(0_u8, [0u8; 32]).unwrap();
+        assert_eq!(result, SolidityValue::Boolean(false));
+    }
+
+    #[test]
+    fn from_bytes_returns_boolean_true_when_not_all_zeros() {
+        let mut bytes = [0u8; 32];
+        bytes[31] = 1;
+        let result = SolidityValue::from_bytes(0_u8, bytes).unwrap();
+        assert_eq!(result, SolidityValue::Boolean(true));
+    }
+
+    #[test]
+    fn from_bytes_returns_uint16_when_type_byte_is_5() {
+        let mut bytes = [0u8; 32];
+        bytes[30] = 0x00;
+        bytes[31] = 0x05;
+        let result = SolidityValue::from_bytes(5_u8, bytes).unwrap();
+        assert_eq!(result, SolidityValue::Uint16(Uint::<16, 1>::from(5_u16)));
+    }
+
+    #[test]
+    fn from_bytes_returns_uint256_when_type_byte_is_35() {
+        let mut bytes = [0u8; 32];
+        bytes[31] = 0xFF;
+        let result = SolidityValue::from_bytes(35_u8, bytes).unwrap();
+        assert_eq!(
+            result,
+            SolidityValue::Uint256(Uint::<256, 4>::from(255_u64))
+        );
+    }
+
+    #[test]
+    fn from_bytes_returns_int16_when_type_byte_is_37() {
+        let mut bytes = [0u8; 32];
+        bytes[30] = 0x00;
+        bytes[31] = 0x0A;
+        let result = SolidityValue::from_bytes(37_u8, bytes).unwrap();
+        assert_eq!(
+            result,
+            SolidityValue::Int16(Signed::<16, 1>::try_from(10_i16).unwrap())
+        );
+    }
+
+    #[test]
+    fn from_bytes_returns_error_when_type_is_unsupported() {
+        let result = SolidityValue::from_bytes(99_u8, [0u8; 32]);
+        assert!(result.is_err());
+    }
+
+    // --- to_bytes ---
+
+    #[test]
+    fn to_bytes_boolean_true_sets_last_byte() {
+        let val = SolidityValue::Boolean(true);
+        let bytes = val.to_bytes();
+        let mut expected = [0u8; 32];
+        expected[31] = 1;
+        assert_eq!(bytes, expected);
+    }
+
+    #[test]
+    fn to_bytes_returns_all_zeros_when_boolean_is_false() {
+        let val = SolidityValue::Boolean(false);
+        assert_eq!(val.to_bytes(), [0u8; 32]);
+    }
+
+    #[test]
+    fn from_bytes_to_bytes_roundtrip_succeeds_for_all_supported_types() {
+        // (type_byte, 32-byte input chosen to exercise all significant bits)
+        let cases: &[(u8, [u8; 32])] = &[
+            (5_u8, {
+                let mut b = [0u8; 32];
+                b[30] = 0x80;
+                b
+            }), // uint16: 0x8000 — both bytes
+            (35_u8, {
+                let mut b = [0u8; 32];
+                b[31] = 0xFF;
+                b
+            }), // uint256: non-zero last byte
+            (37_u8, {
+                let mut b = [0u8; 32];
+                b[30] = 0x80;
+                b[31] = 0x01;
+                b
+            }), // int16: 0x8001 = -32767
+            (67_u8, {
+                let mut b = [0u8; 32];
+                b[0] = 0x7F;
+                b[31] = 0xFF;
+                b
+            }), // int256: both ends
+        ];
+        for (type_byte, original) in cases {
+            let val = SolidityValue::from_bytes(*type_byte, *original).unwrap();
+            assert_eq!(
+                val.to_bytes(),
+                *original,
+                "roundtrip failed for type_byte={type_byte}"
+            );
+        }
+    }
+
+    // --- get_solidity_type_from_handle ---
+
+    #[test]
+    fn get_solidity_type_from_handle_extracts_byte_at_position_5() {
+        let handle = "0x0000000000230000000000000000000000000000000000000000000000000000";
+        let result = get_solidity_type_from_handle(handle).unwrap();
+        assert_eq!(result, 35_u8);
+    }
+
+    #[test]
+    fn get_solidity_type_from_handle_returns_error_when_hex_is_invalid() {
+        let result = get_solidity_type_from_handle("not_hex");
+        assert!(result.is_err());
+    }
+
+    // --- get_solidity_type_size ---
+
+    #[test]
+    fn get_solidity_type_size_returns_expected_size_for_all_supported_types() {
+        let cases = [
+            (0_u8, 1_usize),   // boolean
+            (1_u8, 20_usize),  // address
+            (5_u8, 2_usize),   // uint16:  5  - 3  = 2
+            (35_u8, 32_usize), // uint256: 35 - 3  = 32
+            (37_u8, 2_usize),  // int16:   37 - 35 = 2
+            (67_u8, 32_usize), // int256:  67 - 35 = 32
+        ];
+        for (type_byte, expected_size) in cases {
+            assert_eq!(
+                get_solidity_type_size(type_byte).unwrap(),
+                expected_size,
+                "wrong size for type_byte={type_byte}"
+            );
+        }
+    }
+
+    #[test]
+    fn get_solidity_type_size_returns_error_when_type_is_unsupported() {
+        assert!(get_solidity_type_size(200).is_err());
+    }
+}
