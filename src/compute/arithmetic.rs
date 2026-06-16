@@ -4,7 +4,6 @@ use super::SolidityValue;
 use alloy::primitives::{Signed, Uint};
 
 /// Supported arithmetic operators.
-#[derive(Clone, Copy)]
 pub enum Operator {
     Add,
     Sub,

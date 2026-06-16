@@ -3,7 +3,7 @@
 use super::SolidityValue;
 
 /// Supported boolean operators.
-#[derive(Clone, Copy)]
+#[cfg_attr(test, derive(Clone, Copy))]
 pub enum Operator {
     Eq,
     Ne,
