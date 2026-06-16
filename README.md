@@ -107,7 +107,9 @@ Configuration is loaded from environment variables with the `NOX_RUNNER_` prefix
 | `NOX_RUNNER_NATS__CONSUMER_MAX_DELIVER` | Maximum redelivery attempts per message | No | `10` |
 | `NOX_RUNNER_NATS__MAX_ACK_PENDING` | Buffer size of unacknowledged messages | No | `10` |
 | `NOX_RUNNER_NATS__MAX_BATCH` | Maximum number of messages the runner can pull from the stream | No | `10` |
-| `NOX_RUNNER_HANDLE_GATEWAY_URL` | Handle Gateway base URL | No | `http://localhost:3000` |
+| `NOX_RUNNER_HANDLE_GATEWAY__URL` | Handle Gateway base URL | No | `http://localhost:3000` |
+| `NOX_RUNNER_HANDLE_GATEWAY__CONNECT_TIMEOUT` | Timeout for the conenct phase gainst the Handle Gateway | No | `3s` |
+| `NOX_RUNNER_HANDLE_GATEWAY__TIMEOUT` | Total request timeout against the Handle Gateway | No | `15s` |
 | `NOX_RUNNER_WALLET_KEY` | Private key used to sign Handle Gateway requests (hex, with or without `0x` prefix) | **Yes** | — |
 
 Logging level is controlled via the `RUST_LOG` environment variable:
