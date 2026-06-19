@@ -33,9 +33,10 @@ impl Application {
         for chain_id in config.chains.keys().collect::<Vec<_>>() {
             let nox_rpc = NoxClient::new(
                 &config.chains[chain_id].rpc_url,
+                config.chains[chain_id].call_timeout,
+                config.chains[chain_id].connect_timeout,
                 config.chains[chain_id].nox_compute_contract_address,
-            )
-            .await?;
+            )?;
             let protocol_key = nox_rpc.get_kms_public_key().await?;
             if protocol_keys.insert(*chain_id, protocol_key).is_some() {
                 return Err(format!(

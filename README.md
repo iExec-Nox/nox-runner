@@ -95,8 +95,10 @@ Configuration is loaded from environment variables with the `NOX_RUNNER_` prefix
 | -------- | ----------- | -------- | ------- |
 | `NOX_RUNNER_SERVER__HOST` | Bind address for the HTTP server | No | `127.0.0.1` |
 | `NOX_RUNNER_SERVER__PORT` | Port for the HTTP server | No | `8080` |
-| `NOX_RUNNER_CHAINS__<CHAIN_ID>__RPC_URL` | Ethereum RPC endpoint for reading the `NoxCompute` contract | No | `http://localhost:8545` |
+| `NOX_RUNNER_CHAINS__<CHAIN_ID>__CALL_TIMEOUT` | Total request timeout applied to an RPC call | No | `8s` |
+| `NOX_RUNNER_CHAINS__<CHAIN_ID>__CONNECT_TIMEOUT` | Timeout for the connect phase against the Ethereum RPC endpoint | No | `5s` |
 | `NOX_RUNNER_CHAINS__<CHAIN_ID>__NOX_COMPUTE_CONTRACT_ADDRESS` | `NoxCompute` contract address | No | `0x0000...0000` |
+| `NOX_RUNNER_CHAINS__<CHAIN_ID>__RPC_URL` | Ethereum RPC endpoint URL | No | `http://localhost:8545` |
 | `NOX_RUNNER_NATS__URLS` | NATS server URLs (comma-separated for a cluster) | **Yes** | — |
 | `NOX_RUNNER_NATS__TLS__ENABLED` | Enable mTLS to NATS. Set `false` for a plain dev server | No | `true` |
 | `NOX_RUNNER_NATS__TLS__CA` | CA certificate PEM content. Required when TLS enabled | If TLS | — |
@@ -108,7 +110,7 @@ Configuration is loaded from environment variables with the `NOX_RUNNER_` prefix
 | `NOX_RUNNER_NATS__MAX_ACK_PENDING` | Buffer size of unacknowledged messages | No | `10` |
 | `NOX_RUNNER_NATS__MAX_BATCH` | Maximum number of messages the runner can pull from the stream | No | `10` |
 | `NOX_RUNNER_HANDLE_GATEWAY__URL` | Handle Gateway base URL | No | `http://localhost:3000` |
-| `NOX_RUNNER_HANDLE_GATEWAY__CONNECT_TIMEOUT` | Timeout for the conenct phase gainst the Handle Gateway | No | `3s` |
+| `NOX_RUNNER_HANDLE_GATEWAY__CONNECT_TIMEOUT` | Timeout for the connect phase against the Handle Gateway | No | `3s` |
 | `NOX_RUNNER_HANDLE_GATEWAY__TIMEOUT` | Total request timeout against the Handle Gateway | No | `15s` |
 | `NOX_RUNNER_WALLET_KEY` | Private key used to sign Handle Gateway requests (hex, with or without `0x` prefix) | **Yes** | — |
 
