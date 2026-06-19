@@ -15,6 +15,12 @@ pub struct ServerConfig {
 
 #[derive(Deserialize, Validate)]
 pub struct ChainConfig {
+    #[serde(with = "humantime_serde", default = "default_rpc_call_timeout")]
+    #[validate(custom(function = "validate_timeout"))]
+    pub call_timeout: Duration,
+    #[serde(with = "humantime_serde", default = "default_rpc_connect_timeout")]
+    #[validate(custom(function = "validate_timeout"))]
+    pub connect_timeout: Duration,
     #[validate(url)]
     pub rpc_url: String,
     #[validate(custom(function = "validate_nox_compute_contract_address"))]
@@ -109,6 +115,14 @@ impl Config {
     }
 }
 
+fn default_rpc_call_timeout() -> Duration {
+    Duration::from_secs(8)
+}
+
+fn default_rpc_connect_timeout() -> Duration {
+    Duration::from_secs(5)
+}
+
 fn validate_nats_urls(urls: &Vec<String>) -> Result<(), ValidationError> {
     if urls.is_empty() {
         return Err(ValidationError::new(
@@ -139,12 +153,12 @@ fn validate_nox_compute_contract_address(
 fn validate_timeout(value: &Duration) -> Result<(), ValidationError> {
     if *value == Duration::ZERO {
         let err =
-            ValidationError::new("timeout_zero").with_message(Cow::from("must be greater than 0"));
+            ValidationError::new("timeout_zero").with_message(Cow::from("must be greater than 0s"));
         return Err(err);
     }
     if *value > Duration::from_secs(60) {
-        let err =
-            ValidationError::new("timeout_too_large").with_message(Cow::from("must not exceed 60"));
+        let err = ValidationError::new("timeout_too_large")
+            .with_message(Cow::from("must not exceed 60s"));
         return Err(err);
     }
     Ok(())
@@ -174,40 +188,47 @@ mod tests {
     fn check_config() {
         temp_env::with_vars(
             [
-                (
-                    "NOX_RUNNER_CHAINS__31337__RPC_URL",
-                    Some("http://localhost:8545"),
-                ),
+                ("NOX_RUNNER_CHAINS__31337__CALL_TIMEOUT", Some("10s")),
+                ("NOX_RUNNER_CHAINS__31337__CONNECT_TIMEOUT", Some("5s")),
                 (
                     "NOX_RUNNER_CHAINS__31337__NOX_COMPUTE_CONTRACT_ADDRESS",
                     Some("0x0A59a4e1F7f740CD6474312AfFC1446fA9B5ad9B"),
                 ),
                 (
-                    "NOX_RUNNER_WALLET_KEY",
-                    Some("0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
-                ),
-                (
-                    "NOX_RUNNER_NATS__URLS",
-                    Some("nats://localhost:4221,nats://localhost:4222,nats://localhost:4223"),
+                    "NOX_RUNNER_CHAINS__31337__RPC_URL",
+                    Some("http://localhost:8545"),
                 ),
                 ("NOX_RUNNER_NATS__TLS__ENABLED", Some("true")),
                 ("NOX_RUNNER_NATS__TLS__CA", Some("ca-pem")),
                 ("NOX_RUNNER_NATS__TLS__CERT", Some("cert-pem")),
                 ("NOX_RUNNER_NATS__TLS__KEY", Some("key-pem")),
+                (
+                    "NOX_RUNNER_NATS__URLS",
+                    Some("nats://localhost:4221,nats://localhost:4222,nats://localhost:4223"),
+                ),
+                (
+                    "NOX_RUNNER_WALLET_KEY",
+                    Some("0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
+                ),
             ],
             || {
                 let config = Config::load().expect("should load");
                 config.validate().expect("should validate");
-                assert_eq!("http://localhost:8545", config.chains[&31337].rpc_url);
+                assert_eq!(Duration::from_secs(10), config.chains[&31337].call_timeout);
+                assert_eq!(
+                    Duration::from_secs(5),
+                    config.chains[&31337].connect_timeout
+                );
                 assert_eq!(
                     Address::from_str("0x0A59a4e1F7f740CD6474312AfFC1446fA9B5ad9B").unwrap(),
                     config.chains[&31337].nox_compute_contract_address
                 );
-                assert_eq!(3, config.nats.urls.len());
+                assert_eq!("http://localhost:8545", config.chains[&31337].rpc_url);
                 assert!(config.nats.tls.enabled);
                 assert_eq!("ca-pem", config.nats.tls.ca);
                 assert_eq!("cert-pem", config.nats.tls.cert);
                 assert_eq!("key-pem", config.nats.tls.key);
+                assert_eq!(3, config.nats.urls.len());
             },
         )
     }
@@ -296,14 +317,18 @@ mod tests {
     #[test]
     fn check_invalid_chain_config() {
         let chain_config = ChainConfig {
-            rpc_url: "".to_string(),
+            call_timeout: Duration::from_secs(120),
+            connect_timeout: Duration::from_secs(90),
             nox_compute_contract_address: Address::ZERO,
+            rpc_url: "".to_string(),
         };
         let result = chain_config.validate();
-        assert!(ValidationErrors::has_error(&result, "rpc_url"));
+        assert!(ValidationErrors::has_error(&result, "call_timeout"));
+        assert!(ValidationErrors::has_error(&result, "connect_timeout"));
         assert!(ValidationErrors::has_error(
             &result,
             "nox_compute_contract_address"
         ));
+        assert!(ValidationErrors::has_error(&result, "rpc_url"));
     }
 }

@@ -1,7 +1,10 @@
 //! This modules provides a service to interact with NoxCompute methods.
 
-use alloy::{primitives::Address, providers::RootProvider, sol};
+use std::time::Duration;
+
+use alloy::{primitives::Address, providers::RootProvider, rpc::client::RpcClient, sol};
 use k256::PublicKey;
+use reqwest::{Client, Url};
 use tracing::error;
 
 sol! {
@@ -18,13 +21,23 @@ pub struct NoxClient {
 }
 
 impl NoxClient {
-    /// Creates a NoxClient instance while checking connection on a blockchain node.
-    pub async fn new(rpc_url: &str, contract_address: Address) -> Result<Self, String> {
-        let trimmed_rpc_url = rpc_url.trim_end_matches('/');
-        let provider = RootProvider::connect(trimmed_rpc_url)
-            .await
-            .map_err(|e| format!("Connection to blockchain node failed: {e}"))
+    /// Creates a NoxClient configured with the given timeouts.
+    pub fn new(
+        rpc_url: &str,
+        call_timeout: Duration,
+        connect_timeout: Duration,
+        contract_address: Address,
+    ) -> Result<Self, String> {
+        let rpc_url = Url::parse(rpc_url.trim_end_matches('/'))
+            .map_err(|e| format!("failed to parse URL: {e}"))?;
+        let client = Client::builder()
+            .connect_timeout(connect_timeout)
+            .timeout(call_timeout)
+            .build()
+            .map_err(|e| format!("Failed to build RPC HTTP client: {e}"))
             .inspect_err(|e| error!("{e}"))?;
+        let rpc_client = RpcClient::new_http_with_client(client, rpc_url);
+        let provider = RootProvider::new(rpc_client);
         let contract = INoxCompute::new(contract_address, provider);
         Ok(Self { contract })
     }
@@ -61,6 +74,6 @@ impl NoxClient {
             .await
             .map_err(|e| format!("Call to kmsPublicKey() failed: {e}"))?;
         PublicKey::from_sec1_bytes(&protocol_key_bytes)
-            .map_err(|e| format!("ailed to decode KMS public key {e}"))
+            .map_err(|e| format!("Failed to decode KMS public key {e}"))
     }
 }
