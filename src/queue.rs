@@ -91,6 +91,7 @@ impl QueueService {
     /// in order to preserve transaction integrity as on a blockchain network.
     ///
     /// At the end of the transaction, before publishing handles to the Handle Gateway, the cache is cleared.
+    #[tracing::instrument(skip_all)]
     pub async fn handle_message(
         &mut self,
         transaction_message: &TransactionMessage,
@@ -193,6 +194,7 @@ impl QueueService {
     ///
     /// A plaintext value is provided as bytes32 in the [`EncryptionOperation`] event.
     /// See WrapAsPublicHandle event in [`INoxCompute`](https://github.com/iExec-Nox/nox-protocol-contracts/blob/main/contracts/interfaces/INoxCompute.sol) interface.
+    #[tracing::instrument(skip_all)]
     fn encrypt_plaintext(
         &mut self,
         metadata: &TransactionMetadata,
@@ -211,6 +213,7 @@ impl QueueService {
     /// returns a new handle representing a boolean.
     ///
     /// Comparisons are implemented in [`compare`]
+    #[tracing::instrument(skip_all)]
     async fn compare(
         &mut self,
         metadata: &TransactionMetadata,
@@ -228,6 +231,7 @@ impl QueueService {
     /// Performs an arithmetic computation.
     ///
     /// Arithmetic operations are implemented in [`compute`].
+    #[tracing::instrument(skip_all)]
     async fn compute(
         &mut self,
         metadata: &TransactionMetadata,
@@ -245,6 +249,7 @@ impl QueueService {
     /// Performs a safe arithmetic operation.
     ///
     /// Safe arithmetic operations are implemented in [`safe_compute`].
+    #[tracing::instrument(skip_all)]
     async fn safe_compute(
         &mut self,
         metadata: &TransactionMetadata,
@@ -270,6 +275,7 @@ impl QueueService {
     /// This is equivalent to if { ... } else { ... } or a ternary operator.
     ///
     /// The operation is implemented in [`select`].
+    #[tracing::instrument(skip_all)]
     async fn select(
         &mut self,
         metadata: &TransactionMetadata,
@@ -295,6 +301,7 @@ impl QueueService {
     /// Performs the equivalent of an ERC20 transfer on handles representing uint256 values.
     ///
     /// The operation is implemented in [`transfer`].
+    #[tracing::instrument(skip_all)]
     async fn transfer(
         &mut self,
         metadata: &TransactionMetadata,
@@ -327,6 +334,7 @@ impl QueueService {
     /// Performs the equivalent of an ERC20 mint on handles representing uint256 values.
     ///
     /// The operation is implemented in [`mint`].
+    #[tracing::instrument(skip_all)]
     async fn mint(
         &mut self,
         metadata: &TransactionMetadata,
@@ -359,6 +367,7 @@ impl QueueService {
     /// Performs the equivalent of an ERC20 burn on handles representing uint256 values.
     ///
     /// The operation is implemented in [`burn`].
+    #[tracing::instrument(skip_all)]
     async fn burn(
         &mut self,
         metadata: &TransactionMetadata,

@@ -10,14 +10,17 @@ use axum_prometheus::{
     metrics::{counter, gauge},
 };
 use futures_util::StreamExt;
+use opentelemetry::global;
 use tokio::time::Instant;
-use tracing::{error, info, warn};
+use tracing::{Instrument, error, info, warn};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::config::Config;
 use crate::events::TransactionMessage;
 use crate::handlers;
 use crate::handles::{crypto::CryptoService, gateway::GatewayClient};
 use crate::nats::{ConnectionState, NatsClient};
+use crate::observability::MessageHeaderExtractor;
 use crate::queue::QueueService;
 use crate::rpc::NoxClient;
 
@@ -177,6 +180,14 @@ impl Application {
                 Some(message) = subscriber.next(), if connected => {
                     match message {
                         Ok(msg) => {
+                            let span = tracing::info_span!("nats_msg");
+                            if self.config.otel.enabled && msg.headers.is_some() {
+                                let parent_cx = global::get_text_map_propagator(|propagator| {
+                                    propagator.extract(&MessageHeaderExtractor(msg.headers.as_ref().unwrap()))
+                                });
+                                span.set_parent(parent_cx).expect("toto");
+                            }
+                            let _ = span.enter();
                             let transaction_message = match serde_json::from_slice::<TransactionMessage>(&msg.payload) {
                                 Ok(v) => v,
                                 Err(e) => {
@@ -191,7 +202,7 @@ impl Application {
                             counter!("nox_runner.transaction.received", "chain_id" => transaction_message.chain_id.to_string()).increment(1);
                             counter!("nox_runner.transaction.block_number", "chain_id" => transaction_message.chain_id.to_string()).absolute(transaction_message.block_number);
                             let transaction_hash = transaction_message.transaction_hash.clone();
-                            match self.queue_svc.handle_message(&transaction_message).await {
+                            match self.queue_svc.handle_message(&transaction_message).instrument(span).await {
                                 Ok(_) => {
                                     info!(transaction_hash, "Compute PASS");
                                     match msg.ack().await {

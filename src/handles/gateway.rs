@@ -11,9 +11,10 @@ use alloy::{
     sol_types::{SolStruct, eip712_domain},
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
+use opentelemetry::{Context, global};
 use reqwest::{
     Client,
-    header::{AUTHORIZATION, HeaderValue},
+    header::{AUTHORIZATION, HeaderMap, HeaderValue},
 };
 use rsa::rand_core::{OsRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -22,6 +23,7 @@ use thiserror::Error;
 use tracing::{error, info, warn};
 
 use crate::config::HandleGatewayConfig;
+use crate::observability::HeaderInjector;
 use crate::queue::{OperandEntry, ResultEntry};
 
 /// EIP-712 domain name for Handle Gateway interactions.
@@ -146,6 +148,7 @@ impl GatewayClient {
     /// - [`GatewayError::SignatureError`] if the authorization token payload cannot be signed.
     /// - [`GatewayError::InvalidHeaderValue`] if the authorization header value cannot be created.
     /// - [`GatewayError::CommunicationError`] on communication error with the Handle Gateway.
+    #[tracing::instrument(skip_all)]
     pub async fn get_handles(
         &self,
         chain_id: u32,
@@ -168,10 +171,17 @@ impl GatewayClient {
         };
         let auth_value = self.generate_authorization(chain_id, &payload)?;
 
+        let mut headers = HeaderMap::new();
+        let cx = Context::current();
+        global::get_text_map_propagator(|propagator| {
+            propagator.inject_context(&cx, &mut HeaderInjector(&mut headers));
+        });
+        headers.insert(AUTHORIZATION, auth_value);
+
         let response = self
             .client
             .get(&url)
-            .header(AUTHORIZATION, auth_value)
+            .headers(headers)
             .query(&[("salt", &salt.to_string())])
             .send()
             .await
@@ -215,6 +225,7 @@ impl GatewayClient {
     /// - [`GatewayError::SignatureError`] if the authorization token payload cannot be signed.
     /// - [`GatewayError::InvalidHeaderValue`] if the authorization header value cannot be created.
     /// - [`GatewayError::CommunicationError`] on communication error with the Handle Gateway.
+    #[tracing::instrument(skip_all)]
     pub async fn push_results(
         &self,
         chain_id: u32,
@@ -234,10 +245,17 @@ impl GatewayClient {
         };
         let auth_value = self.generate_authorization(chain_id, &payload)?;
 
+        let mut headers = HeaderMap::new();
+        let cx = Context::current();
+        global::get_text_map_propagator(|propagator| {
+            propagator.inject_context(&cx, &mut HeaderInjector(&mut headers));
+        });
+        headers.insert(AUTHORIZATION, auth_value);
+
         let response = self
             .client
             .post(&url)
-            .header(AUTHORIZATION, auth_value)
+            .headers(headers)
             .query(&[("salt", &salt.to_string())])
             .json(&handles)
             .send()

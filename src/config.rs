@@ -78,6 +78,13 @@ pub struct Config {
     pub handle_gateway: HandleGatewayConfig,
     #[validate(custom(function = "validate_wallet_key"))]
     pub wallet_key: String,
+    pub otel: OtelConfig,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct OtelConfig {
+    pub enabled: bool,
+    pub url: String,
 }
 
 impl Config {
@@ -210,6 +217,8 @@ mod tests {
                     "NOX_RUNNER_WALLET_KEY",
                     Some("0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
                 ),
+                ("NOX_RUNNER_OTEL__ENABLED", Some("false")),
+                ("NOX_RUNNER_OTEL__URL", Some("false")),
             ],
             || {
                 let config = Config::load().expect("should load");
@@ -261,6 +270,7 @@ mod tests {
                 assert_eq!(2, config.nats.urls.len());
                 assert!(!config.nats.tls.enabled);
                 assert_eq!("", config.nats.tls.ca);
+                assert_eq!(false, config.otel.enabled);
             },
         )
     }
@@ -282,6 +292,8 @@ mod tests {
                 ("NOX_RUNNER_NATS__MAX_ACK_PENDING", Some("500")),
                 ("NOX_RUNNER_NATS__MAX_BATCH", Some("500")),
                 ("NOX_RUNNER_WALLET_KEY", Some("0x")),
+                ("NOX_RUNNER_OTEL__ENABLED", Some("true")),
+                ("NOX_RUNNER_OTEL__URL", Some("false")),
             ],
             || {
                 let config = Config::load().expect("should load");
