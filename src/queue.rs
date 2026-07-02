@@ -4,7 +4,7 @@ use alloy::primitives::{FixedBytes, hex, utils::Keccak256};
 use axum_prometheus::metrics::counter;
 use serde::{Deserialize, Serialize};
 use strum::VariantNames;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::events::{
     ArithmeticOperation, BooleanOperation, BurnOperation, EncryptionOperation, MintOperation,
@@ -438,6 +438,10 @@ impl QueueService {
     }
 
     /// Decrypts and converts an operand to its alloy-primitives type.
+    ///
+    /// If operand size is bigger than 32 bytes, the data is truncated to 32 bytes and a warn is emitted.
+    /// This should not happen at the moment due to the existing encoding rules in Runner and Handle Gateway.
+    /// If it happens, as we only support numeric types, the truncation of high-order bits is the correct one.
     fn decrypt_and_format_operand(&self, entry: &OperandEntry) -> Result<SolidityValue, String> {
         info!(handle = entry.handle, "decrypting operand");
         let data_bytes = self.crypto_svc.ecies_decrypt(
@@ -445,9 +449,20 @@ impl QueueService {
             &entry.encrypted_shared_secret,
             &entry.iv,
         )?;
-        let mut result = [0u8; 32];
-        result[(32 - data_bytes.len())..32].copy_from_slice(&data_bytes);
         let solidity_type = get_solidity_type_from_handle(&entry.handle)?;
+        let mut result = [0u8; 32];
+        if 32 < data_bytes.len() {
+            // offset to truncate data_bytes to 32 bytes, cut high-order bits
+            let offset = data_bytes.len() - 32;
+            warn!(
+                handle = entry.handle,
+                len = data_bytes.len(),
+                "decrypted payload larger than max allowed 32 bytes, truncating"
+            );
+            result[0..32].copy_from_slice(&data_bytes[offset..]);
+        } else {
+            result[(32 - data_bytes.len())..32].copy_from_slice(&data_bytes);
+        }
         SolidityValue::from_bytes(solidity_type, result)
     }
 
