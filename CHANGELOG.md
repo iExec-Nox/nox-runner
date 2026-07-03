@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.7.0](https://github.com/iExec-Nox/nox-runner/compare/v0.6.0...v0.7.0) (2026-07-03)
+
+
+### Features
+
+* add slsa attest ([#57](https://github.com/iExec-Nox/nox-runner/issues/57)) ([c56433e](https://github.com/iExec-Nox/nox-runner/commit/c56433e7d8f12c46e362d89f8304353c1f72c933))
+
+
+### Bug Fixes
+
+* define timeouts for Ethereum RPC reqwest client ([#55](https://github.com/iExec-Nox/nox-runner/issues/55)) ([f32a79e](https://github.com/iExec-Nox/nox-runner/commit/f32a79e92c8f3072fc20f9c3240b4a226137df1f))
+* define timeouts for Handle Gateway reqwest client ([#53](https://github.com/iExec-Nox/nox-runner/issues/53)) ([59619a5](https://github.com/iExec-Nox/nox-runner/commit/59619a5ddc0c3efa4aeef07632a60e96c9f16d65))
+* only fetch operands from Handle Gateway if operands are missing from cache ([#51](https://github.com/iExec-Nox/nox-runner/issues/51)) ([0bced31](https://github.com/iExec-Nox/nox-runner/commit/0bced31b2d00fc81a09ee028f8a3b83fdf63b2f3))
+* remove panic when receiving an oversized plaintext ([#56](https://github.com/iExec-Nox/nox-runner/issues/56)) ([07093d7](https://github.com/iExec-Nox/nox-runner/commit/07093d7fe85314383c815e903b82d7f82f228bc0))
+
 ## [0.6.0](https://github.com/iExec-Nox/nox-runner/compare/v0.5.0...v0.6.0) (2026-06-02)
 
 
